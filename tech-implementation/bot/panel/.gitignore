@@ -1,0 +1,7 @@
+node_modules/
+dist/
+
+# Byproduct of building this npm project via Deno's npm-compat mode (used by
+# the local gate check) — this subproject is npm/vite, not Deno, and has no
+# deno.json; nothing here should depend on this lockfile.
+deno.lock

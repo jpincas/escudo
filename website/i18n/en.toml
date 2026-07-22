@@ -1,0 +1,10 @@
+# UI strings that live in the theme rather than in content.
+
+[footer_project]
+other = "Escudo is an Open Source Project"
+
+[footer_licence]
+other = "Text and images CC BY-SA 4.0 · Code MIT"
+
+[footer_made]
+other = "Made with ❤️ in Bercianos del RC, Spain"

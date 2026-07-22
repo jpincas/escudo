@@ -1,0 +1,26 @@
+This repository holds two kinds of work, under two licences.
+
+## Content and artwork — CC BY-SA 4.0
+
+Everything in `website/`, `graphics/` and `research/` is licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International licence.
+
+    https://creativecommons.org/licenses/by-sa/4.0/
+
+Take it, translate it, put your own village's name on it. Credit Escudo, and
+share what you improve under the same terms.
+
+Third-party material inside those directories keeps its own licence:
+
+  - The crest is drawn with Material Design Icons (Apache-2.0).
+  - Fonts are Bricolage Grotesque and Public Sans (SIL Open Font Licence).
+  - The Hugo theme in `website/themes/book/` is MIT, per its own LICENSE.
+  - Externally sourced photographs are credited, with their individual CC
+    licences and required attribution, in `graphics/photos-external/CREDITS.md`.
+
+## Software — MIT
+
+Everything in `tech-implementation/` is licensed under the MIT licence, the
+full text of which is at `tech-implementation/bot/LICENSE`.
+
+Copyright (c) 2026 Escudo contributors

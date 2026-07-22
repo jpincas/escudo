@@ -1,0 +1,32 @@
+{
+  "assets": [
+    {
+      "out": "graphics/photos-generated/sign-up-meeting.jpg",
+      "size": "1536x1024",
+      "quality": "medium",
+      "format": "jpeg",
+      "prompt": "Photorealistic documentary photograph, 35mm, natural window light. Inside a plain village hall in rural Castilla y León, Spain: six or seven neighbours in their sixties and seventies sit around a folding table with coffee cups, holding their own mobile phones. A woman in her thirties leans over one man's shoulder, pointing at his phone screen, helping him set it up. Everyone is dressed in ordinary everyday rural Spanish clothes — fleeces, checked shirts, cardigans. Warm, unposed, slightly candid, mid-conversation. Muted earthy palette, whitewashed walls, no decoration. Absolutely no text, no signs, no lettering, no logos anywhere in the frame. Not a stock-photo look."
+    },
+    {
+      "out": "graphics/photos-generated/first-neighbour.jpg",
+      "size": "1536x1024",
+      "quality": "medium",
+      "format": "jpeg",
+      "prompt": "Photorealistic documentary photograph, 35mm, blue-hour dusk, available light only. A narrow street of low adobe and brick houses in a small village on the flat Castilian plain, Spain. A man in his sixties in a work jacket stands in the middle of the empty lane holding a torch pointed down at the road, looking off toward the far end of the street as if guiding a vehicle in. Behind him, one house has its porch light on and its door standing open, spilling warm light onto the road. Cold blue evening sky, bare fields visible at the end of the street. Quiet, real, unposed. Absolutely no text, no signs, no lettering, no logos anywhere in the frame."
+    },
+    {
+      "out": "graphics/photos-generated/field-fire.jpg",
+      "size": "1536x1024",
+      "quality": "medium",
+      "format": "jpeg",
+      "prompt": "Photorealistic documentary photograph, 35mm, late afternoon August light, heat haze. A stubble fire burning along the edge of a harvested cereal field on the flat plain of León, Spain: a low line of orange flame and a broad column of grey-brown smoke drifting sideways across a huge pale sky. In the middle distance, a battered green tractor with a water bowser on a dirt track, and three or four villagers in ordinary clothes standing well back from the flames, watching, one on a mobile phone. Dust, dry gold stubble, poplars on the horizon. Absolutely no text, no signs, no lettering, no logos anywhere in the frame."
+    },
+    {
+      "out": "graphics/photos-generated/checking-in.jpg",
+      "size": "1536x1024",
+      "quality": "medium",
+      "format": "jpeg",
+      "prompt": "Photorealistic documentary photograph, 35mm, soft morning light. The doorway of an old brick and adobe house in a small Spanish village: a woman in her eighties in a housecoat and cardigan stands in her open doorway, one hand on the frame, talking and half-smiling to a neighbour in her fifties standing on the step below her with a bag of bread under one arm. Worn wooden door, chipped paint, a geranium in a tin by the step, an empty village street behind. Warm, ordinary, entirely unposed — a two-minute conversation, not an event. Absolutely no text, no signs, no lettering, no logos anywhere in the frame."
+    }
+  ]
+}

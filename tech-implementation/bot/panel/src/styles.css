@@ -1,0 +1,329 @@
+/* Escudo panel — brand palette and a plain, dense desktop layout.
+   No webfonts, no external requests: system font stack only.
+
+   rojo-alarma is reserved for genuine alarm/danger semantics — the delete
+   confirm and the "overdue"/"never" device statuses — never decoration.
+   Ámbar is the everyday accent. Keep that split; it's what makes the alarm
+   colour mean something when it appears. */
+
+:root {
+  --verde: #153f32;
+  --verde-light: #1f5c48;
+  --ambar: #e0a12e;
+  --papel: #f7f8f6;
+  --tinta: #22201c;
+  --rojo-alarma: #d24435;
+
+  --border: #d8d6d0;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--papel);
+  color: var(--tinta);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+#root {
+  min-width: 960px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--verde);
+  margin: 0 0 4px;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+h2 {
+  font-size: 17px;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--tinta);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--verde);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button.button--primary {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #fff;
+}
+
+button.button--primary:hover:not(:disabled) {
+  background: var(--verde-light);
+}
+
+button.button--danger {
+  background: var(--rojo-alarma);
+  border-color: var(--rojo-alarma);
+  color: #fff;
+}
+
+button.button--danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+button.button--danger-text {
+  background: none;
+  border-color: transparent;
+  color: var(--rojo-alarma);
+  padding: 9px 8px;
+}
+
+button.button--danger-text:hover:not(:disabled) {
+  text-decoration: underline;
+  border-color: transparent;
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--verde);
+}
+
+.app-header__subtitle {
+  color: #55534c;
+  margin: 0;
+}
+
+/* ── Toolbar / empty state / loading / error ──────────────────────── */
+
+.devices-screen__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.loading {
+  color: #55534c;
+  padding: 24px 0;
+}
+
+.error-view {
+  background: #fbeae7;
+  border: 1px solid var(--rojo-alarma);
+  color: var(--tinta);
+  border-radius: 6px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.error-view p {
+  margin: 0;
+}
+
+.empty-state {
+  background: #fff;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  max-width: 560px;
+  margin: 24px auto;
+}
+
+.empty-state p {
+  color: #55534c;
+}
+
+.signed-out {
+  max-width: 480px;
+  margin: 96px auto 0;
+  text-align: center;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────── */
+
+.device-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.device-table th,
+.device-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.device-table th {
+  background: var(--verde);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.device-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.device-table tbody tr:hover {
+  background: #f1efe9;
+}
+
+.device-table__actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* ── Status badge ──────────────────────────────────────────────────── */
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge--ok {
+  background: #e4efe9;
+  color: var(--verde);
+}
+
+.status-badge--overdue,
+.status-badge--never {
+  background: #fbeae7;
+  color: var(--rojo-alarma);
+}
+
+/* ── Modal ─────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(34, 32, 28, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 28px 32px;
+  width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* ── Forms ─────────────────────────────────────────────────────────── */
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--tinta);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: 2px solid var(--ambar);
+  outline-offset: 1px;
+}
+
+.form-field__help {
+  color: #77756c;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.form-field__readonly {
+  padding: 9px 10px;
+  background: #f1efe9;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #55534c;
+  margin: 0;
+}
+
+.form-error {
+  color: var(--rojo-alarma);
+  font-size: 13px;
+  margin: -8px 0 16px;
+}
+
+.delete-confirm__body {
+  margin-bottom: 4px;
+}

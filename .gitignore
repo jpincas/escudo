@@ -1,0 +1,23 @@
+# Secrets and per-machine overrides — never committed
+.env*.local
+
+# Local data (Deno KV files, exports)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Hugo build output
+website/public/
+website/resources/
+website/.hugo_build.lock
+
+# Python scratch venvs used by the graphics tooling
+.venv/
+__pycache__/
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/

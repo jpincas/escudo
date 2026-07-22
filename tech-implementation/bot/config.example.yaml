@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Escudo — configuración del pueblo / village configuration
+#
+# Copy this to `config.yaml` and edit it. Village POLICY only: what the
+# buttons say, how loudly they ring, how long data is kept. It is COMMITTED
+# to your fork — nothing in here identifies a deployment, and Deno Deploy
+# needs it present in the source it uploads.
+#
+# Everything that wires up YOUR deployment lives in the environment instead
+# (`.env.local` locally, `deno deploy env add …` in production):
+#   ESCUDO_BOT_TOKEN      — from @BotFather. The one real secret.
+#   ESCUDO_GROUP_CHAT_ID  — the village group where alerts are posted.
+#                           Add the bot to the group and run /chatid there.
+#   ESCUDO_ADMIN_CHAT_ID  — optional private chat for maintenance alerts.
+#
+# Adopting a new village = edit this file + set those env vars. Nothing else.
+# ─────────────────────────────────────────────────────────────────────────────
+
+village:
+  name: "Ejemplo del Camino"
+  # Language of every message the bot sends: es | en
+  locale: es
+  # IANA timezone — used for the timestamp shown on each alert.
+  timezone: Europe/Madrid
+
+# The alert buttons. `id` selects the label from src/i18n/<locale>.ts; add
+# `label:` to override it with your own wording. Layout is by urgency, not
+# by the order here: alarms tile two per row, quiet ones go full-width at
+# the bottom.
+categories:
+  - id: fuego
+    emoji: "🔥"
+  - id: medico
+    emoji: "🚑"
+  - id: delito
+    emoji: "🚔"
+  - id: emergencia
+    emoji: "🆘"
+  # The quiet tier: a real need, but not an emergency — a door that won't open,
+  # a ladder, a lift to town. It posts to the same group and reaches the same
+  # people, silently, and sits on its own row below the location button.
+  #
+  # It exists to protect the alarm. People mute groups that make noise, and a
+  # muted group is the single biggest failure in this whole system. Delete this
+  # entry if your village doesn't want it.
+  - id: ayuda
+    emoji: "🤝"
+    urgency: quiet
+
+alerts:
+  # Printed at the foot of every alert. Use YOUR national emergency numbers.
+  emergency_line: "062 Guardia Civil · 112 Emergencias"
+  # Repeat presses by the same person, same category, within this many seconds
+  # reuse the open alert instead of posting a duplicate. Panic-pressing and
+  # shaky hands are normal; two alerts for one emergency are not.
+  dedupe_seconds: 60
+
+data:
+  # Incidents are deleted after this many days. Spec §4 / GDPR: 12 months.
+  retention_days: 365
+
+devices:
+  # Alarm devices registered in the admin panel — a pendant, a wall unit, a
+  # watch, or just a neighbour's own phone — raise the alarm by calling or
+  # texting the village's bridge number.
+  #
+  # Unlike a phone in the group, they report nothing about themselves: no
+  # heartbeat, no battery level, no "still here". A scheduled test is the only
+  # proof one still works, so past this many days without a real alert or a
+  # test, the panel marks it caducado and the coordinator goes and checks.
+  prove_within_days: 60

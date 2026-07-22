@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Boton Escudo">
+  <circle cx="256.0" cy="256.0" r="256.0" fill="#153f32"/>
+  <g fill="none" stroke="#e0a12e" stroke-width="17" stroke-linecap="round" opacity="0.45"><path d="M122.4 65.1 A233 233 0 0 1 389.6 65.1 M389.6 446.9 A233 233 0 0 1 122.4 446.9"/></g>
+  <g fill="none" stroke="#e0a12e" stroke-width="20" stroke-linecap="round" opacity="0.85"><path d="M143.0 94.6 A197 197 0 0 1 369.0 94.6 M369.0 417.4 A197 197 0 0 1 143.0 417.4"/></g>
+  <circle cx="256.0" cy="256.0" r="152" fill="#d24435"/>
+  <g transform="translate(168.87 157.06) scale(0.8713)"><path d="M32 16 L168 16 Q180 16 180 28 L180 122 Q180 178 100 218 Q20 178 20 122 L20 28 Q20 16 32 16 Z" fill="#153f32"/></g>
+  <text x="256.0" y="269.0" text-anchor="middle" fill="#e0a12e" font-family="Bricolage Grotesque" font-weight="800" font-size="55" letter-spacing="1">SOS</text>
+</svg>

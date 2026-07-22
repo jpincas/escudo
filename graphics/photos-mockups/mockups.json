@@ -1,0 +1,29 @@
+{
+  "_comment": "One entry per mockup scene. Language-agnostic: render.py pairs each scene with the artwork for each language. Paths are relative to graphics/.",
+  "mockups": [
+    {
+      "name": "entrada-pueblo",
+      "photo": "photos-originals/entrada-pueblo.jpg",
+      "artwork": "sign",
+      "prompt": "Place the supplied Escudo entrance sign at the edge of the village, on the grass to the left of the road, a little before the glass bus shelter. Mount it as a real road sign: two galvanised steel posts sunk into the grass, the panel about chest height. Keep it MODEST in size — a standard village-entrance information sign of roughly 120 x 60 cm, similar scale to the bus shelter's glass panels, occupying only a small part of the frame. Not a billboard. Its face turns towards the approaching driver, and it must not obscure the bus shelter or the picnic area."
+    },
+    {
+      "name": "farola",
+      "photo": "photos-originals/photo_2_2026-07-16_19-13-52.jpg",
+      "artwork": "plaque",
+      "prompt": "Mount the supplied Escudo plaque on the galvanised lamppost in the foreground, at roughly eye height, facing the camera and following the slight curve of the post. Fix it with two visible stainless bolts or metal bands, as a durable outdoor plaque would be. Keep the brick wall, street and sky exactly as they are."
+    },
+    {
+      "name": "plaque-grande",
+      "photo": "photos-originals/photo_8_2026-07-16_19-13-52.jpg",
+      "artwork": "plaque",
+      "prompt": "Screw the supplied Escudo plaque to the whitewashed rendered wall to the left of the old wooden gate, at about head height, square to the wall and flat against it. Four small screws at the corners, a soft contact shadow beneath. Keep the weathered wall texture, the gate and the light exactly as they are."
+    },
+    {
+      "name": "puerta-sticker",
+      "photo": "photos-originals/photo_4_2026-07-16_19-13-52.jpg",
+      "artwork": "sticker",
+      "prompt": "Apply the supplied Escudo sticker to the glass panel of the front door, next to the doorbell, at about eye height. The sticker must sit ENTIRELY within the glass pane, with clear glass visible around all four of its edges — it must not touch or overlap the white door frame. It should look like vinyl adhered flat to the inside of the glass: slight glass reflection over it, the patterned glass faintly visible around it, no curling edges."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "dar-aviso",
+    "base": "base-fuego.png",
+    "out": "dar-aviso.png",
+    "parts": [
+      "bot-confirmacion",
+      "bot-teclado"
+    ],
+    "prompt": "Documentary photograph, rural León, Spain. A woman in her seventies stands in the doorway of an adobe village house, holding a smartphone up in both hands, the screen facing the camera straight on. THE PHONE SCREEN IS COMPLETELY BLANK PURE WHITE, a flat empty white rectangle with no icons, no text, no user interface whatsoever. Her expression is urgent but composed. Behind her, across flat wheat fields, a column of grey smoke rises. Warm late-afternoon light, dusty ochre and straw tones, muted green shutters. Natural reportage style, shallow depth of field, no text anywhere in the image."
+  }
+]

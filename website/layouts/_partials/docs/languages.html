@@ -1,0 +1,20 @@
+{{- /* Escudo flag language switcher — flags only, no labels. Links to the
+       translated page where it exists, otherwise to that language's home. */ -}}
+{{- $urls := dict .Site.Language.Lang .RelPermalink -}}
+{{- range .Translations -}}
+  {{- $urls = merge $urls (dict .Language.Lang .RelPermalink) -}}
+{{- end -}}
+{{- $current := .Site.Language.Lang -}}
+{{- $flags := dict "en" "🇬🇧" "es" "🇪🇸" -}}
+
+<nav class="escudo-languages" aria-label="Language">
+  {{- range hugo.Sites -}}
+    {{- $lang := .Language.Lang -}}
+    {{- $href := index $urls $lang | default .Home.RelPermalink -}}
+    {{- $active := eq $lang $current -}}
+    <a href="{{ $href }}" hreflang="{{ $lang }}" class="escudo-lang{{ if $active }} is-active{{ end }}"
+       title="{{ .Language.Label }}" aria-label="{{ .Language.Label }}"{{ if $active }} aria-current="true"{{ end }}>
+      <span class="flag">{{ index $flags $lang }}</span>
+    </a>
+  {{- end -}}
+</nav>

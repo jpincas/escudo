@@ -1,0 +1,10 @@
+<div class="book-brand escudo-brand">
+  <a class="escudo-brand-link" href="{{ partial "docs/links/home" . }}">
+    <img class="escudo-mark" src="{{ "img/escudo-crest-mark.svg" | relURL }}" width="76" height="92" alt="Escudo">
+
+    <span class="escudo-wordmark">
+      <span class="escudo-name">Escudo</span>
+      {{ with .Site.Params.BookTagline }}<span class="escudo-tagline">{{ . }}</span>{{ end }}
+    </span>
+  </a>
+</div>

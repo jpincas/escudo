@@ -1,0 +1,200 @@
+// The admin panel's HTTP API.
+//
+// Mounted under /api and used only by the SPA in panel/. Deliberately separate
+// from everything on the alert path: no handler here is reachable from Telegram
+// or from the bridge, and nothing here is imported by src/alerts.ts. A panel
+// route failing must never be able to stop an alarm being raised.
+//
+// Every route except the link exchange requires a session cookie. Authority
+// comes from having been an admin at the moment the link was minted; see auth.ts.
+
+import { Hono } from "hono";
+import { z } from "zod";
+import type { Config } from "../config.ts";
+import type { Device, DeviceKind, PanelSession, Store } from "../store/types.ts";
+import { clearedCookie, exchangeLink, sessionCookie, tokenFromCookies } from "./auth.ts";
+import { MSISDN, normaliseMsisdn } from "../msisdn.ts";
+
+/**
+ * Panel copy lives here rather than in src/i18n, which types every string the
+ * *bot* can say to the village. These are operator-facing messages in a tool
+ * only admins ever open; keeping them out avoids growing that interface — and
+ * its "a half-translated locale fails deno check" guarantee — with strings the
+ * village will never see.
+ */
+const MESSAGES = {
+  es: {
+    unauthorized: "Sesión caducada. Pide un enlace nuevo al bot con /panel.",
+    badLink: "Este enlace ya se ha usado o ha caducado. Pide otro con /panel.",
+    badMsisdn: "El teléfono debe estar en formato internacional, por ejemplo +34600111222.",
+    duplicate: "Ese número ya está registrado.",
+    notFound: "No existe ningún dispositivo con ese número.",
+    invalid: "Faltan datos o no son válidos.",
+  },
+  en: {
+    unauthorized: "Session expired. Ask the bot for a new link with /panel.",
+    badLink: "That link has already been used or has expired. Ask for another with /panel.",
+    badMsisdn: "The phone number must be in international format, e.g. +34600111222.",
+    duplicate: "That number is already registered.",
+    notFound: "No device is registered with that number.",
+    invalid: "Something is missing or invalid.",
+  },
+} as const;
+
+const KINDS = ["base", "pendant", "watch", "phone", "other"] as const;
+
+const CreateDevice = z.object({
+  msisdn: z.string().trim(),
+  label: z.string().trim().min(1),
+  address: z.string().trim().min(1),
+  kind: z.enum(KINDS),
+});
+
+const UpdateDevice = z.object({
+  label: z.string().trim().min(1).optional(),
+  address: z.string().trim().min(1).optional(),
+  kind: z.enum(KINDS).optional(),
+});
+
+export type DeviceStatus = "ok" | "overdue" | "never";
+
+/**
+ * How a device looks to the panel: the stored record plus the one derived thing
+ * a coordinator is actually scanning the table for.
+ */
+export interface DeviceView extends Device {
+  status: DeviceStatus;
+}
+
+/**
+ * A device is only as trustworthy as its last proof. Never proven is called out
+ * separately from merely overdue: one is an install that was never finished,
+ * the other is a routine that has slipped, and they need different actions.
+ */
+export function deviceStatus(
+  device: Device,
+  proveWithinDays: number,
+  now: Date = new Date(),
+): DeviceStatus {
+  if (!device.lastProvenAt) return "never";
+  const ageDays = (now.getTime() - new Date(device.lastProvenAt).getTime()) / 86_400_000;
+  return ageDays > proveWithinDays ? "overdue" : "ok";
+}
+
+/** The session the auth middleware puts on every request below it. */
+type PanelEnv = { Variables: { session: PanelSession } };
+
+export function createPanelApi(config: Config, store: Store): Hono<PanelEnv> {
+  const api = new Hono<PanelEnv>();
+  const m = MESSAGES[config.village.locale];
+
+  const view = (device: Device): DeviceView => ({
+    ...device,
+    status: deviceStatus(device, config.devices.proveWithinDays),
+  });
+
+  const isSecure = (url: string) => new URL(url).protocol === "https:";
+
+  // ── Session ──
+
+  api.post("/session/exchange", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const token = z.object({ token: z.string().min(1) }).safeParse(body);
+    if (!token.success) return c.json({ error: m.badLink }, 401);
+
+    const session = await exchangeLink(store, token.data.token);
+    if (!session) return c.json({ error: m.badLink }, 401);
+
+    c.header("set-cookie", sessionCookie(session.token, isSecure(c.req.url)));
+    return c.json({
+      telegramId: session.telegramId,
+      name: session.name,
+      village: config.village.name,
+      locale: config.village.locale,
+    });
+  });
+
+  // Everything below this point needs a session.
+  api.use("*", async (c, next) => {
+    if (c.req.path.endsWith("/session/exchange")) return await next();
+
+    const token = tokenFromCookies(c.req.header("cookie") ?? null);
+    const session = token ? await store.getSession(token) : null;
+    if (!session) return c.json({ error: m.unauthorized }, 401);
+
+    c.set("session", session);
+    await next();
+  });
+
+  api.get("/session", (c) => {
+    const session = c.get("session");
+    return c.json({
+      telegramId: session.telegramId,
+      name: session.name,
+      village: config.village.name,
+      locale: config.village.locale,
+    });
+  });
+
+  api.post("/session/logout", async (c) => {
+    await store.deleteSession(c.get("session").token);
+    c.header("set-cookie", clearedCookie(isSecure(c.req.url)));
+    return c.body(null, 204);
+  });
+
+  // ── Devices ──
+
+  api.get("/devices", async (c) => {
+    const devices = await store.listDevices();
+    return c.json(devices.map(view));
+  });
+
+  api.post("/devices", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = CreateDevice.safeParse(body);
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    const msisdn = normaliseMsisdn(parsed.data.msisdn);
+    if (!MSISDN.test(msisdn)) return c.json({ error: m.badMsisdn }, 400);
+
+    // The number is the key, and re-registering one would silently repoint a
+    // household's alarm at a different address.
+    if (await store.getDevice(msisdn)) return c.json({ error: m.duplicate }, 400);
+
+    const device: Device = {
+      msisdn,
+      label: parsed.data.label,
+      address: parsed.data.address,
+      kind: parsed.data.kind as DeviceKind,
+      lastProvenAt: null,
+      registeredAt: new Date().toISOString(),
+    };
+    await store.putDevice(device);
+    return c.json(view(device), 201);
+  });
+
+  api.patch("/devices/:msisdn", async (c) => {
+    const device = await store.getDevice(normaliseMsisdn(c.req.param("msisdn")));
+    if (!device) return c.json({ error: m.notFound }, 404);
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = UpdateDevice.safeParse(body);
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    // msisdn is deliberately absent from UpdateDevice: it is the identity of
+    // the record. Changing a household's number means removing and re-adding,
+    // which is a decision someone should have to make deliberately.
+    const updated: Device = { ...device, ...parsed.data };
+    await store.putDevice(updated);
+    return c.json(view(updated));
+  });
+
+  api.delete("/devices/:msisdn", async (c) => {
+    const msisdn = normaliseMsisdn(c.req.param("msisdn"));
+    if (!await store.getDevice(msisdn)) return c.json({ error: m.notFound }, 404);
+    await store.deleteDevice(msisdn);
+    return c.body(null, 204);
+  });
+
+  return api;
+}

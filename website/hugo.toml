@@ -1,0 +1,43 @@
+baseURL = 'https://escudo.red/'
+title = 'Escudo'
+theme = 'book'
+enableGitInfo = false
+
+# Multilingual: Spanish is the default (served at /), English at /en/.
+defaultContentLanguage = 'es'
+defaultContentLanguageInSubdir = false
+
+[languages]
+  [languages.en]
+    label = 'English'
+    locale = 'en-GB'
+    weight = 2
+    contentDir = 'content/en'
+    [languages.en.params]
+      # Tagline shown under the wordmark in the sidebar
+      BookTagline = 'Communities that respond'
+  [languages.es]
+    label = 'Español'
+    locale = 'es-ES'
+    weight = 1
+    contentDir = 'content/es'
+    [languages.es.params]
+      BookTagline = 'Comunidades que responden'
+
+[params]
+  # Where the whole project lives — linked from the site-wide footer.
+  RepoURL = 'https://github.com/jpincas/escudo'
+  # Custom Escudo theme mixin defined in assets/_custom.scss
+  BookTheme = 'escudo'
+  # Build the sidebar menu from the whole site tree (not just a /docs section)
+  BookSection = '*'
+  BookToC = true
+  BookServiceWorker = false
+  BookSearch = false
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 3

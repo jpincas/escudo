@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Red Escudo">
+  <circle cx="256.0" cy="256.0" r="256.0" fill="#153f32"/>
+  <g stroke="#e0a12e" stroke-width="13" opacity="0.7"><line x1="256.0" y1="66.0" x2="420.5" y2="161.0"/><line x1="420.5" y1="161.0" x2="420.5" y2="351.0"/><line x1="420.5" y1="351.0" x2="256.0" y2="446.0"/><line x1="256.0" y1="446.0" x2="91.5" y2="351.0"/><line x1="91.5" y1="351.0" x2="91.5" y2="161.0"/><line x1="91.5" y1="161.0" x2="256.0" y2="66.0"/></g>
+  <g><circle cx="256.0" cy="66.0" r="27" fill="#e0a12e"/><circle cx="420.5" cy="161.0" r="27" fill="#e0a12e"/><circle cx="420.5" cy="351.0" r="27" fill="#e0a12e"/><circle cx="256.0" cy="446.0" r="27" fill="#e0a12e"/><circle cx="91.5" cy="351.0" r="27" fill="#e0a12e"/><circle cx="91.5" cy="161.0" r="27" fill="#e0a12e"/></g>
+  <g transform="translate(138.18 122.15) scale(1.1782)"><path d="M32 16 L168 16 Q180 16 180 28 L180 122 Q180 178 100 218 Q20 178 20 122 L20 28 Q20 16 32 16 Z" fill="#e0a12e"/></g>
+</svg>

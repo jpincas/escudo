@@ -1,0 +1,10 @@
+# Textos de interfaz que viven en el tema, no en el contenido.
+
+[footer_project]
+other = "Escudo es un proyecto de código abierto"
+
+[footer_licence]
+other = "Textos e imágenes CC BY-SA 4.0 · Código MIT"
+
+[footer_made]
+other = "Hecho con ❤️ en Bercianos del RC, España"
