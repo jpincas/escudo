@@ -11,6 +11,7 @@ import type { Store } from "../store/types.ts";
 import { strings, t } from "../i18n/mod.ts";
 import { isGroupAdmin } from "./admin.ts";
 import { issueLink } from "../panel/auth.ts";
+import { reportingKeyboard } from "./private.ts";
 
 export function registerPanel(bot: Bot, config: Config, store: Store): void {
   bot.chatType("private").command("panel", async (ctx) => {
@@ -43,6 +44,11 @@ export function registerPanel(bot: Bot, config: Config, store: Store): void {
       // No preview: this is a credential, and there is nothing to gain from
       // Telegram's crawler fetching it and holding it in a cache.
       link_preview_options: { is_disabled: true },
+      // Re-send the keyboard with the link. A reply carrying no markup leaves
+      // Telegram Desktop showing the buttons collapsed behind the icon in the
+      // input bar, and an admin who has just used /panel would be looking at a
+      // plain text box. The buttons are the alert path; they go back up.
+      reply_markup: reportingKeyboard(config),
     });
   });
 }
