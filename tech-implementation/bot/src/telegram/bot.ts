@@ -95,9 +95,9 @@ export function createBot(config: Config, store: Store): Bot {
  * way back to the buttons. Unlike the keyboard, this survives the member
  * clearing their chat history.
  *
- * Two scopes. Everyone sees the two commands they might need; group admins also
- * see the four that run the network, so the coordinator can find /test without
- * keeping a note of it.
+ * Everyone sees the commands they might need; group admins also see the ones
+ * that run the network, so the coordinator can find /test without keeping a
+ * note of it.
  *
  * Scope is *visibility only* — Telegram has no admin-only commands. A hidden
  * command still runs if typed, so every privileged handler checks
@@ -105,21 +105,60 @@ export function createBot(config: Config, store: Store): Bot {
  */
 export async function publishCommands(bot: Bot, config: Config): Promise<void> {
   const s = strings(config.village.locale);
+  const sos = { command: "sos", description: s.cmd.menuSos };
+  const start = { command: "start", description: s.cmd.menuStart };
+  const test = { command: "test", description: s.cmd.menuTest };
+  const exported = { command: "export", description: s.cmd.menuExport };
+
+  // A menu entry that does nothing where it is offered is worse than no entry:
+  // it gets tried during an emergency. So each scope lists only what actually
+  // works in that kind of chat — /start and /panel are private-only, /pin and
+  // /chatid are for the group.
+  const inGroup = [sos];
+  const inPrivate = [sos, start];
+  const groupAdmins = [
+    sos,
+    test,
+    exported,
+    { command: "pin", description: s.cmd.menuPin },
+    { command: "chatid", description: s.cmd.menuChatId },
+  ];
+  const privateAdmins = [
+    sos,
+    start,
+    test,
+    exported,
+    { command: "panel", description: s.cmd.menuPanel },
+  ];
+
   try {
-    await bot.api.setMyCommands([
-      { command: "sos", description: s.cmd.menuSos },
-      { command: "start", description: s.cmd.menuStart },
-    ]);
-    await bot.api.setMyCommands([
-      { command: "sos", description: s.cmd.menuSos },
-      { command: "start", description: s.cmd.menuStart },
-      { command: "pin", description: s.cmd.menuPin },
-      { command: "test", description: s.cmd.menuTest },
-      { command: "export", description: s.cmd.menuExport },
-      { command: "chatid", description: s.cmd.menuChatId },
-      { command: "panel", description: s.cmd.menuPanel },
-    ], { scope: { type: "all_chat_administrators" } });
+    await bot.api.setMyCommands(inGroup);
+    await bot.api.setMyCommands(inPrivate, { scope: { type: "all_private_chats" } });
+    await bot.api.setMyCommands(groupAdmins, { scope: { type: "all_chat_administrators" } });
   } catch (err) {
     console.warn("Could not publish the command list", err);
+  }
+
+  // The admins' own DMs, individually — `all_chat_administrators` covers group
+  // and supergroup chats only and has no effect on a private menu, and there is
+  // no "all private chats of admins" scope. For a DM, chat_id is the user's id.
+  // This is why /panel was listed solely in the group, where its handler
+  // ignores it, and hidden in the DM, where it works.
+  //
+  // Best-effort and separately tolerant: an admin who has never opened a
+  // private chat with the bot errors here, exactly as they do for the location
+  // DM, and that must not cost the other admins their menu.
+  try {
+    const admins = await bot.api.getChatAdministrators(config.telegram.groupChatId);
+    for (const member of admins) {
+      if (member.user.is_bot) continue;
+      try {
+        await bot.api.setMyCommands(privateAdmins, {
+          scope: { type: "chat", chat_id: member.user.id },
+        });
+      } catch { /* No private chat with this admin yet. */ }
+    }
+  } catch (err) {
+    console.warn("Could not publish the admin command list to private chats", err);
   }
 }

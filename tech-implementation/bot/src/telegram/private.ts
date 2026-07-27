@@ -93,7 +93,7 @@ export function registerPrivateReporting(
     config.categories.map((c) => [buttonLabel(config, c.id), c.id]),
   );
 
-  bot.chatType("private").on("message:text", async (ctx) => {
+  bot.chatType("private").on("message:text", async (ctx, next) => {
     const pressed = ctx.message.text.trim();
     const category = byLabel.get(pressed) ??
       // Only consulted if the current keyboard doesn't know the label, so a
@@ -107,7 +107,12 @@ export function registerPrivateReporting(
     // can hide it by hand — and someone who needs it will not know that
     // /start brings it back. Any message at all is enough.
     if (!category) {
-      if (pressed.startsWith("/")) return; // Commands handled elsewhere.
+      // Commands are handled elsewhere — and "elsewhere" includes handlers
+      // registered after this one, so the chain must be passed on rather than
+      // returned from. Returning here silently swallowed every command whose
+      // handler is registered below this middleware; /panel was the only one,
+      // and it did nothing at all in a DM, which is the one place it works.
+      if (pressed.startsWith("/")) return await next();
       await ctx.reply(s.board.hint, { reply_markup: reportingKeyboard(config) });
       return;
     }
