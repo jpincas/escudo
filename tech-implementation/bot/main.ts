@@ -128,7 +128,7 @@ const handleBridge = zadarmaSecret
     ...bridgeDeps,
     apiSecret: zadarmaSecret,
     ivrPlayId: config.secrets.zadarmaIvrPlayId,
-    checkSourceIp: true,
+    checkSourceIp: config.runtime.checkSourceIp,
   })
   : twilioToken && bridgeUrl
   ? createBridge({ ...bridgeDeps, authToken: twilioToken, publicUrl: bridgeUrl })

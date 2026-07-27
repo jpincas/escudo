@@ -56,10 +56,19 @@ export interface ZadarmaDeps extends InboundDeps {
 /**
  * Verify Zadarma signed this notification.
  *
- * Their scheme, from the reference implementation: base64 of an HMAC-SHA1 over
- * a per-event string, keyed with the account secret, compared against the
+ * Their scheme, from the reference implementation
+ * (`Client::encodeSignature`, zadarma/user-api-v1): an HMAC-SHA1 over a
+ * per-event string, keyed with the account secret, compared against the
  * `Signature` header. For NOTIFY_START that string is caller_id + called_did +
  * call_start, concatenated with no separator.
+ *
+ * **The digest is hex-encoded before it is base64'd.** PHP's `hash_hmac()`
+ * returns lowercase hexits unless asked for binary, and Zadarma's library never
+ * asks — so `base64_encode(hash_hmac(...))` is base64 over 40 ASCII characters,
+ * not over the 20 raw bytes. Signing the bytes produces a completely different
+ * string and fails every genuine call. Their own docs say only "SHA1, then
+ * base64", which reads like the binary form; the library is what the server
+ * actually matches.
  *
  * Note this signs the call's identity, not the whole body — so it proves the
  * caller and the time were not tampered with, which is exactly what the alarm
@@ -72,30 +81,36 @@ export async function verifyZadarmaSignature(
 ): Promise<boolean> {
   if (!signature) return false;
 
-  let provided: Uint8Array<ArrayBuffer>;
-  try {
-    const raw = atob(signature);
-    provided = new Uint8Array(new ArrayBuffer(raw.length));
-    for (let i = 0; i < raw.length; i++) provided[i] = raw.charCodeAt(i);
-  } catch {
-    return false;
-  }
-
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(apiSecret),
     { name: "HMAC", hash: "SHA-1" },
     false,
-    ["verify"],
+    ["sign"],
   );
-  // subtle.verify rather than comparing base64 strings: it compares in constant
-  // time, which is the whole reason this check is worth anything.
-  return await crypto.subtle.verify(
+  const mac = await crypto.subtle.sign(
     "HMAC",
     key,
-    provided,
     new TextEncoder().encode(signatureString),
   );
+  const hex = Array.from(new Uint8Array(mac))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return timingSafeEqual(btoa(hex), signature);
+}
+
+/**
+ * Compare without giving away how far the comparison got.
+ *
+ * The encoded signature is a fixed length, so returning early on a length
+ * mismatch leaks nothing an attacker could not work out from the scheme.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 /** Zadarma's signature covers these three fields, in this order. */
@@ -108,6 +123,17 @@ function sourceIpAllowed(req: Request): boolean {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   if (!forwarded) return false;
   return ALLOWED_PREFIXES.some((prefix) => forwarded.startsWith(prefix));
+}
+
+/**
+ * What the proxy actually told us, for the log line.
+ *
+ * A refusal here means no alarm, so "outside the range" on its own is not
+ * enough to act on: the whole question is *which* address arrived, and whether
+ * the header was there at all.
+ */
+function sourceIpSeen(req: Request): string {
+  return req.headers.get("x-forwarded-for") ?? "(no x-forwarded-for header)";
 }
 
 /**
@@ -139,7 +165,13 @@ export function createZadarmaBridge(
     if (req.method !== "POST") return json({}, 405);
 
     if (deps.checkSourceIp && !sourceIpAllowed(req)) {
-      console.warn("Bridge: rejected a notification from outside Zadarma's range");
+      console.warn(
+        `Bridge: rejected a notification from outside Zadarma's range — saw ${
+          sourceIpSeen(req)
+        }. ` +
+          "Set ESCUDO_BRIDGE_CHECK_SOURCE_IP=false if this is genuine; the signature is the lock " +
+          "that matters.",
+      );
       return json({}, 403);
     }
 
@@ -187,12 +219,18 @@ export function createZadarmaBridge(
 /**
  * What Zadarma should do with the call now that the village has been raised.
  *
- * Play the recording, then hang up. `hangup` is always sent: without it the
- * call sits open on Zadarma's side after the message, and an elderly caller
- * listening to silence will assume it failed and dial again.
+ * With a recording configured: play it, then hang up. `hangup` goes with it
+ * because otherwise the call sits open on Zadarma's side after the message, and
+ * an elderly caller listening to silence will assume it failed and dial again.
+ *
+ * With none configured, say nothing at all and let the PBX's own scenario run.
+ * Bercianos has a text-to-speech greeting on the PBX main menu, which is what a
+ * caller there actually hears; replying `hangup` would cut it off and leave them
+ * with the silence this whole answer exists to prevent. An empty reply is not a
+ * missing one — it means "carry on", and the alarm has already gone either way.
  */
 function answer(deps: ZadarmaDeps): Record<string, unknown> {
-  return deps.ivrPlayId ? { ivr_play: deps.ivrPlayId, hangup: 1 } : { hangup: 1 };
+  return deps.ivrPlayId ? { ivr_play: deps.ivrPlayId, hangup: 1 } : {};
 }
 
 function json(body: Record<string, unknown>, status: number): Response {

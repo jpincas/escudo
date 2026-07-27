@@ -11,7 +11,7 @@
 
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { AlertService } from "../src/alerts.ts";
-import { createZadarmaBridge, VOICE_PATH } from "../src/bridge/zadarma.ts";
+import { createZadarmaBridge, startSignatureString, VOICE_PATH } from "../src/bridge/zadarma.ts";
 import { MemoryStore } from "../src/store/memory.ts";
 import type { Device, Store } from "../src/store/types.ts";
 import { FakeNotifier, makeConfig } from "./helpers.ts";
@@ -41,7 +41,13 @@ function device(overrides: Partial<Device> = {}): Device {
  * the code under test: a test that shares the implementation would pass just as
  * happily if both sides were wrong together.
  *
- * base64(HMAC-SHA1(caller_id + called_did + call_start, secret)).
+ * base64(hex(HMAC-SHA1(caller_id + called_did + call_start, secret))).
+ *
+ * The hex step is not decoration — see the note in zadarma.ts. Reimplementing
+ * it here was not enough on its own: the first version of this helper repeated
+ * the same wrong assumption as the bridge, so both agreed and every real call
+ * would have been refused in Bercianos. Hence the golden vector below, computed
+ * outside this codebase against PHP's semantics.
  */
 async function sign(params: Record<string, string>): Promise<string> {
   const payload = (params.caller_id ?? "") + (params.called_did ?? "") +
@@ -54,8 +60,37 @@ async function sign(params: Record<string, string>): Promise<string> {
     ["sign"],
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-  return btoa(String.fromCharCode(...new Uint8Array(mac)));
+  const hex = Array.from(new Uint8Array(mac))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return btoa(hex);
 }
+
+Deno.test("the signature matches Zadarma's own encoding, byte for byte", async () => {
+  // base64_encode(hash_hmac('sha1', "+34600111222+349871234562026-07-23 09:00:00",
+  // 'zadarma-api-secret')) — PHP's hash_hmac returns hexits, so this is base64
+  // over 40 characters, not over 20 bytes. If this constant ever has to change,
+  // the bridge has stopped speaking Zadarma's language.
+  assertEquals(
+    startSignatureString(startParams()),
+    "+34600111222+349871234562026-07-23 09:00:00",
+  );
+  assertEquals(
+    await sign(startParams()),
+    "ZGE1ZTQwZWMwOTNhYTI3MzkyYjgwZWNmZDQwZWYwMzQ0YWMzMGQ2Ng==",
+  );
+});
+
+Deno.test("a signature over the raw digest, as their docs read, is refused", async () => {
+  const { store, notifier, handle } = setup();
+  await store.putDevice(device());
+
+  // The plausible misreading: base64 of the 20 HMAC bytes. It must not pass, or
+  // the check would accept two different encodings and prove nothing.
+  const res = await post(handle, startParams(), "2l5A7Ak6onOSuA7P1A7wNErDDWY=");
+  assertEquals(res?.status, 403);
+  assertEquals(notifier.posted.length, 0);
+});
 
 function setup(now = new Date("2026-07-23T09:00:00.000Z")) {
   const config = makeConfig();
@@ -137,7 +172,7 @@ Deno.test("the reply plays the recording and hangs up", async () => {
   assertEquals(await res?.json(), { ivr_play: IVR_ID, hangup: 1 });
 });
 
-Deno.test("with no recording configured the call is still hung up", async () => {
+Deno.test("with no recording configured the PBX's own greeting is left to run", async () => {
   const config = makeConfig();
   const store: Store = new MemoryStore();
   const now = new Date("2026-07-23T09:00:00.000Z");
@@ -150,8 +185,10 @@ Deno.test("with no recording configured the call is still hung up", async () => 
   });
   await store.putDevice(device());
 
+  // Empty, not `{hangup: 1}` — hanging up here would cut off the greeting the
+  // PBX is about to play, which is the caller's only confirmation it worked.
   const res = await post(handle, startParams());
-  assertEquals(await res?.json(), { hangup: 1 });
+  assertEquals(await res?.json(), {});
 });
 
 Deno.test("an unsigned notification raises nothing", async () => {
@@ -216,6 +253,64 @@ Deno.test("a caller id that isn't a phone number raises nothing", async () => {
   assertEquals(notifier.posted.length, 0);
   // Not even the inbox: an unusable caller id is nothing we can act on later.
   assertEquals((await store.listInbox()).length, 0);
+});
+
+// The source-IP check. It is off in every test above, which is how the bridge
+// runs locally and self-hosted; these two pin down what it does when it is on.
+function setupWithIpCheck() {
+  const config = makeConfig();
+  const store: Store = new MemoryStore();
+  const notifier = new FakeNotifier();
+  const now = new Date("2026-07-23T09:00:00.000Z");
+  const handle = createZadarmaBridge({
+    config,
+    store,
+    alerts: new AlertService(config, store, notifier, () => now),
+    apiSecret: SECRET,
+    checkSourceIp: true,
+    now: () => now,
+  });
+  return { store, notifier, handle };
+}
+
+async function postFrom(
+  handle: ReturnType<typeof createZadarmaBridge>,
+  ip: string | null,
+): Promise<Response | null> {
+  const url = BASE + VOICE_PATH;
+  const params = startParams();
+  const headers = new Headers({
+    "content-type": "application/x-www-form-urlencoded",
+    "signature": await sign(params),
+  });
+  if (ip !== null) headers.set("x-forwarded-for", `${ip}, 10.0.0.1`);
+  return await handle(
+    new Request(url, { method: "POST", headers, body: new URLSearchParams(params) }),
+    new URL(url),
+  );
+}
+
+Deno.test("with the IP check on, a correctly signed call from Zadarma's range is accepted", async () => {
+  const { store, notifier, handle } = setupWithIpCheck();
+  await store.putDevice(device());
+
+  // 185.45.152.40/30 is the documented range.
+  const res = await postFrom(handle, "185.45.152.41");
+  assertEquals(res?.status, 200);
+  assertEquals(notifier.posted.length, 1);
+});
+
+Deno.test("with the IP check on, a correctly signed call from anywhere else raises nothing", async () => {
+  const { store, notifier, handle } = setupWithIpCheck();
+  await store.putDevice(device());
+
+  // A valid signature is not enough — this is the second lock, and a leaked
+  // secret must still be useless from the wrong address.
+  assertEquals((await postFrom(handle, "203.0.113.9"))?.status, 403);
+  // No header at all: reached directly, with nothing to check. Refused, which is
+  // why the check must stay off unless a proxy is known to set it.
+  assertEquals((await postFrom(handle, null))?.status, 403);
+  assertEquals(notifier.posted.length, 0);
 });
 
 Deno.test("a GET that isn't the handshake is refused", async () => {

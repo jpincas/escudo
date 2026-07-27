@@ -34,15 +34,16 @@ deno deploy env add ESCUDO_BOT_TOKEN "123456:ABC…" --org=<org> --app=escudo-bo
 deno deploy env add ESCUDO_GROUP_CHAT_ID "-1001234567890" --org=<org> --app=escudo-bot
 
 # 3. Where the app is reachable from a browser. /panel needs it to build the
-#    admin link, and the bridge needs it to verify Twilio's signatures — those
-#    are signed over the URL Twilio was configured with, not the one Deploy's
-#    proxy hands us. Without it, no panel links and no bridge.
+#    admin link, and Telegram needs it to switch from polling to webhooks.
 deno deploy env add ESCUDO_PUBLIC_URL "https://escudo-bot.<org>.deno.net" --org=<org> --app=escudo-bot
 
-# 4. The Twilio account auth token, if the village has a number yet. This is
-#    what signs the /bridge webhooks; unset, the two routes are not mounted and
-#    calls and SMS raise nothing. Telegram alerts are unaffected either way.
-deno deploy env add ESCUDO_TWILIO_AUTH_TOKEN "…" --org=<org> --app=escudo-bot
+# 4. The Zadarma account secret, if the village has a number yet. This is what
+#    signs the call webhook; unset, /bridge/voice is not mounted and a call
+#    raises nothing. Telegram alerts are unaffected either way.
+deno deploy env add ESCUDO_ZADARMA_API_SECRET "…" --org=<org> --app=escudo-bot
+
+# 4b. Optional: the greeting played back to the caller (a hex id, see below).
+deno deploy env add ESCUDO_ZADARMA_IVR_PLAY_ID "a6842305f1996e34" --org=<org> --app=escudo-bot
 
 # 5. Deploy. This also registers the panel's server-side build command on the
 #    app the first time (see the first trap below for why that matters).
@@ -52,19 +53,63 @@ deno task deploy
 deno task set-webhook https://escudo-bot.<org>.deno.net
 ```
 
-## The bridge
+## The bridge (Zadarma)
 
-In the Twilio console, on the number itself:
+**Deploy the app first.** Saving the notification URL makes Zadarma call it immediately with
+`?zd_echo=<nonce>`, and it refuses the URL unless the exact value comes back. A URL saved against a
+dead app is rejected on the spot.
 
-- **A call comes in** → Webhook, `https://escudo-bot.<org>.deno.net/bridge/voice`, HTTP POST
-- **A message comes in** → Webhook, `https://escudo-bot.<org>.deno.net/bridge/sms`, HTTP POST
+In the Zadarma account, in this order:
 
-Both URLs must match `ESCUDO_PUBLIC_URL` exactly, character for character — the signature is
-computed over the URL as configured, so a trailing slash or a `www.` that differs makes every
-genuine call fail the check and raise nothing.
+1. **Buy the León number and enable the free cloud PBX.** A Spanish geographic number needs identity
+   and local-address documents; approval is not instant. The PBX is the part that emits webhooks — a
+   number pointed straight at a SIP line or a forward never notifies anything. Route the number to
+   the PBX.
+2. **Take the API key and secret** (Settings → API). The secret is `ESCUDO_ZADARMA_API_SECRET`; it
+   signs the webhook as well as API calls. The key is only needed if you configure the rest by API.
+3. **Set the notification URL** to `https://escudo-bot.<org>.deno.net/bridge/voice` — in the console
+   under Integrations, or `POST /v1/pbx/callinfo/url/` with `url=…`. Unlike Twilio the URL is not
+   part of the signature, so it need not match `ESCUDO_PUBLIC_URL`.
+4. **Enable `notify_start`** — `POST /v1/pbx/callinfo/notifications/` with `notify_start=true`, or
+   the corresponding checkbox. **This is the one that matters.** The others can stay off; the bridge
+   acknowledges and ignores them.
+5. **Upload the greeting** under the PBX voice menu ("Choose or read another file" reveals the id —
+   a hex string like `a6842305f1996e34`, _not_ a number). That id is `ESCUDO_ZADARMA_IVR_PLAY_ID`.
+   Unset, the caller hears silence and the line drops; the alarm is raised either way.
+6. **Register the calling number** in `/panel`, or the call lands in the inbox and the group hears
+   nothing — which is the correct behaviour, and the most likely reason a first test looks dead.
 
-The voice webhook replies `<Reject/>`, so the call is released before answer: never answered, never
-billed, and the caller hears it ring out.
+The alarm fires on `NOTIFY_START`, at ring rather than at answer, so it survives the caller hanging
+up after two rings. The reply to that webhook then plays the greeting and hangs up.
+
+**The signature is base64 of the _hex_ HMAC-SHA1**, not of the raw digest — PHP's `hash_hmac()`
+returns hexits and Zadarma's reference library never asks for binary, while their prose says only
+"SHA1, then base64". Signing the bytes fails every genuine call with a 403 and a
+`rejected an unsigned call notification` log line. `tests/zadarma_test.ts` pins both encodings
+against a golden vector.
+
+Zadarma notifies from `185.45.152.40/30`, and the bridge can refuse anything outside that range
+before the signature is checked. **It is off by default and Bercianos leaves it off.** It was on
+once, and it refused every genuine call — the address Deploy's proxy reports in `x-forwarded-for` is
+not one of Zadarma's, and the failure is invisible from the village: the phone rings, the greeting
+plays, and nobody is told. The signature is an HMAC over the caller and the call time keyed with the
+account secret, so the IP range is only ever a second lock against something the first one already
+stops. Turn it on with `ESCUDO_BRIDGE_CHECK_SOURCE_IP=true` only behind a proxy whose header you
+have verified with a real call.
+
+### Testing it without a number
+
+```bash
+deno task test-call                                        # against `deno task dev`
+deno task test-call https://escudo-bot.<org>.deno.net +34600111222
+```
+
+Sends what Zadarma sends — the same fields, the same signature encoding — and proves the `zd_echo`
+handshake separately, since a URL that fails it is never accepted in the first place. Against
+production it is refused on source IP, which is the check working. What it cannot prove is anything
+upstream of the app: that the number is routed to the PBX, and that `notify_start` is enabled. Those
+two need a real call from a real handset, and they are where a bridge that passes every test here
+still stays silent.
 
 The app's registered build command (`deno task build`, step 5 above) installs the admin panel's npm
 dependencies and builds it to `panel/dist` on the platform's build machines, which the app then

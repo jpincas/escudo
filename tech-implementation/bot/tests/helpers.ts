@@ -27,7 +27,13 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       zadarmaApiSecret: undefined,
       zadarmaIvrPlayId: undefined,
     },
-    runtime: { kvPath: undefined, port: 8000, publicUrl: undefined, telegramMode: "polling" },
+    runtime: {
+      kvPath: undefined,
+      port: 8000,
+      publicUrl: undefined,
+      telegramMode: "polling",
+      checkSourceIp: false,
+    },
     ...overrides,
   };
 }

@@ -5,6 +5,7 @@
     "start": "deno run --unstable-kv --unstable-cron --allow-net --allow-read --allow-write --allow-env --env-file=.env.local --env-file=.env main.ts",
     "deploy": "deno run --allow-net --allow-read --allow-env --allow-run scripts/deploy.ts",
     "set-webhook": "deno run --allow-net --allow-read --allow-env --env-file=.env.local --env-file=.env scripts/set-webhook.ts",
+    "test-call": "deno run --allow-net --allow-read --allow-env --env-file=.env.local --env-file=.env scripts/test-call.ts",
     "test": "deno test --unstable-kv --allow-read --allow-write --allow-env tests/",
     "iterate": "deno check main.ts",
     "check": "deno fmt --check && deno lint && deno check main.ts && deno task test",

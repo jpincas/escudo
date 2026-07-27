@@ -92,6 +92,24 @@ export interface Config {
     kvPath: string | undefined;
     port: number;
     /**
+     * Whether to believe `x-forwarded-for` and refuse anything from outside
+     * Zadarma's range.
+     *
+     * **Off by default, deliberately.** It was on, and in Bercianos it refused
+     * every genuine call: the address Deploy's proxy reports is not one of
+     * Zadarma's, and the failure is silent from the village's side — the phone
+     * rings, the greeting plays, and nobody is told. A check that can only ever
+     * fail closed on the alarm path has to earn its place, and this one cannot:
+     * the signature is an HMAC over the caller and the call time, keyed with the
+     * account secret, and an attacker who has that has the API too. The IP range
+     * adds a second lock against a threat the first one already stops.
+     *
+     * Kept because it is free where it does work — a deployment behind a proxy
+     * you control, whose `x-forwarded-for` you have actually verified. Turn it
+     * on there with ESCUDO_BRIDGE_CHECK_SOURCE_IP, having made a real call first.
+     */
+    checkSourceIp: boolean;
+    /**
      * Where this bot is reachable from a browser, e.g.
      * https://escudo-bot.jpincas.deno.net. Only /panel needs it, to build a
      * link an admin can open; unset simply means no panel links.
@@ -146,6 +164,21 @@ function required(name: string): string {
     );
   }
   return value;
+}
+
+/**
+ * An on/off env var with a default.
+ *
+ * Anything other than the two spellings throws rather than being read as false:
+ * a typo'd `ESCUDO_BRIDGE_CHECK_SOURCE_IP=yes` silently disabling a security
+ * check is exactly the failure this whole file exists to prevent.
+ */
+export function boolEnv(name: string, fallback: boolean): boolean {
+  const raw = Deno.env.get(name);
+  if (raw === undefined || raw === "") return fallback;
+  if (raw === "true" || raw === "1" || raw === "on") return true;
+  if (raw === "false" || raw === "0" || raw === "off") return false;
+  throw new Error(`${name} must be true or false, got "${raw}".`);
 }
 
 /** Parse a chat id env var. Exported so tests can exercise it without env. */
@@ -224,6 +257,7 @@ export async function loadConfig(): Promise<Config> {
     runtime: {
       kvPath: Deno.env.get("ESCUDO_KV_PATH") || undefined,
       port: Number(Deno.env.get("ESCUDO_PORT") ?? 8000),
+      checkSourceIp: boolEnv("ESCUDO_BRIDGE_CHECK_SOURCE_IP", false),
       publicUrl,
       telegramMode,
     },
