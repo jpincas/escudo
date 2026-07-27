@@ -1,8 +1,21 @@
 <!doctype html>
+<!-- lang is a build-time default only — the real value is set from the
+     resolved locale by LocaleProvider (src/i18n/context.tsx) before the app
+     paints, since this static file is served identically to every village
+     regardless of its configured locale. -->
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1024" />
+    <!-- Brand faces (CLAUDE.md): Bricolage Grotesque for display, Public Sans
+         for body. The panel's old "no webfonts" rule is lifted for this
+         branding pass — see styles.css's header. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <title>Escudo — Panel</title>
   </head>
   <body>

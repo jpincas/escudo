@@ -196,9 +196,17 @@ web.use(
 );
 // Bare /panel, and anything below it that isn't a real file, fall through to
 // index.html: the SPA boots and works out what to show, including exchanging a
-// ?t= link. serveStatic calls next() when it finds nothing, so these run only
-// for paths the middleware above couldn't satisfy.
-const panelIndex = serveStatic({ path: `${panelDist}/index.html` });
+// ?t= link or resolving a client-side route like /panel/history (§2's shell).
+// serveStatic calls next() when it finds nothing, so these run only for paths
+// the middleware above couldn't satisfy.
+//
+// `root: "/"` is required here, and easy to lose: hono's serveStatic joins
+// `path` against `root` (default "./") with node's path.join, which silently
+// strips the leading slash off an absolute `path` when `root` is relative —
+// turning this into a bogus path resolved against Deno.cwd() and a silent
+// 404 for every route below bare /panel. Same trap the `panelDist` comment
+// above already names for `root`; it applies to `path` too.
+const panelIndex = serveStatic({ path: `${panelDist}/index.html`, root: "/" });
 web.get("/panel", panelIndex);
 web.get("/panel/*", panelIndex);
 web.notFound((c) => c.text("not found", 404));

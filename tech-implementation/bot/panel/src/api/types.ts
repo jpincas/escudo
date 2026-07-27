@@ -2,11 +2,13 @@
 // definitions by hand, since the two apps don't share a build. If the backend
 // changes a shape, this file has to change with it.
 
+import type { Locale } from "../i18n/mod.ts";
+
 export interface Me {
   telegramId: string;
   name: string;
   village: string;
-  locale: "es" | "en";
+  locale: Locale;
 }
 
 export type DeviceKind = "base" | "wearable" | "phone" | "alarm" | "other";

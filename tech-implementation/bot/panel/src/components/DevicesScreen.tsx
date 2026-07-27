@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { Device, Me } from "../api/types.ts";
+import type { Device } from "../api/types.ts";
 import { useDevices } from "../hooks/useDevices.ts";
-import { fmt, strings } from "../strings.ts";
+import { useStrings } from "../i18n/context.tsx";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal.tsx";
 import { DeviceFormModal } from "./DeviceFormModal.tsx";
 import { DeviceTable } from "./DeviceTable.tsx";
@@ -18,8 +18,11 @@ import { TestAlertModal } from "./TestAlertModal.tsx";
  */
 const CATEGORIES = ["emergencia", "fuego", "medico", "delito"];
 
-/** The panel's only screen: the roster of alert devices for this village. */
-export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
+/** The Devices section: the roster of alert devices for this village. Village
+ *  name and signed-in admin now live in the sidebar (see Shell.tsx), so this
+ *  screen only needs its own heading and toolbar. */
+export function DevicesScreen() {
+  const s = useStrings();
   const { state, reload, addDevice, editDevice, removeDevice } = useDevices();
 
   const [showAdd, setShowAdd] = useState(false);
@@ -30,20 +33,12 @@ export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void
   return (
     <div className="devices-screen">
       <header className="app-header">
-        <div>
-          <h1>{strings.devices.heading}</h1>
-          <p className="app-header__subtitle">
-            {fmt(strings.header.subtitle, { village: me.village, name: me.name })}
-          </p>
-        </div>
-        <button type="button" onClick={onSignOut}>
-          {strings.header.signOut}
-        </button>
+        <h1>{s.devices.heading}</h1>
       </header>
 
       <div className="devices-screen__toolbar">
         <button type="button" className="button--primary" onClick={() => setShowAdd(true)}>
-          {strings.devices.add}
+          {s.devices.add}
         </button>
       </div>
 
@@ -53,8 +48,8 @@ export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void
 
       {state.status === "loaded" && state.devices.length === 0 && (
         <div className="empty-state">
-          <h2>{strings.devices.empty.heading}</h2>
-          <p>{strings.devices.empty.body}</p>
+          <h2>{s.devices.empty.heading}</h2>
+          <p>{s.devices.empty.body}</p>
         </div>
       )}
 

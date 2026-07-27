@@ -1,10 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { ApiError } from "../api/client.ts";
 import type { Device, DeviceEdit, DeviceKind, NewDevice } from "../api/types.ts";
-import { strings } from "../strings.ts";
+import { useStrings } from "../i18n/context.tsx";
 import { Modal } from "./Modal.tsx";
 
-const KIND_OPTIONS = Object.keys(strings.devices.kind) as DeviceKind[];
+// Fixed rather than derived from Strings: the set of kinds and their order
+// (matches the backend's own KINDS in src/panel/api.ts) doesn't change with
+// locale — only each kind's label does, read from `s.devices.kind` at render.
+const KIND_OPTIONS: DeviceKind[] = ["base", "wearable", "phone", "alarm", "other"];
 
 // A bare structural check, not a substitute for the backend's own validation
 // (which is what actually decides whether a number is acceptable) — this
@@ -25,6 +28,7 @@ type DeviceFormModalProps =
   };
 
 export function DeviceFormModal(props: DeviceFormModalProps) {
+  const s = useStrings();
   const { onClose } = props;
   const device = props.mode === "edit" ? props.device : undefined;
 
@@ -47,16 +51,16 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
       }
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : strings.genericError);
+      setError(err instanceof ApiError ? err.message : s.genericError);
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal title={device ? strings.form.editTitle : strings.form.addTitle} onClose={onClose}>
+    <Modal title={device ? s.form.editTitle : s.form.addTitle} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <div className="form-field">
-          <label htmlFor="device-msisdn">{strings.form.msisdn}</label>
+          <label htmlFor="device-msisdn">{s.form.msisdn}</label>
           {device
             ? (
               // The key can't change once a device exists — reads as plain
@@ -74,13 +78,13 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
                   value={msisdn}
                   onChange={(e) => setMsisdn(e.target.value)}
                 />
-                <p className="form-field__help">{strings.form.msisdnHelp}</p>
+                <p className="form-field__help">{s.form.msisdnHelp}</p>
               </>
             )}
         </div>
 
         <div className="form-field">
-          <label htmlFor="device-label">{strings.form.label}</label>
+          <label htmlFor="device-label">{s.form.label}</label>
           <input
             id="device-label"
             type="text"
@@ -88,11 +92,11 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
-          <p className="form-field__help">{strings.form.labelHelp}</p>
+          <p className="form-field__help">{s.form.labelHelp}</p>
         </div>
 
         <div className="form-field">
-          <label htmlFor="device-address">{strings.form.address}</label>
+          <label htmlFor="device-address">{s.form.address}</label>
           <input
             id="device-address"
             type="text"
@@ -100,11 +104,11 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />
-          <p className="form-field__help">{strings.form.addressHelp}</p>
+          <p className="form-field__help">{s.form.addressHelp}</p>
         </div>
 
         <div className="form-field">
-          <label htmlFor="device-kind">{strings.form.kind}</label>
+          <label htmlFor="device-kind">{s.form.kind}</label>
           <select
             id="device-kind"
             value={kind}
@@ -112,7 +116,7 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
           >
             {KIND_OPTIONS.map((k) => (
               <option key={k} value={k}>
-                {strings.devices.kind[k]}
+                {s.devices.kind[k]}
               </option>
             ))}
           </select>
@@ -126,10 +130,10 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={submitting}>
-            {strings.form.cancel}
+            {s.form.cancel}
           </button>
           <button type="submit" className="button--primary" disabled={submitting}>
-            {submitting ? strings.form.saving : strings.form.save}
+            {submitting ? s.form.saving : s.form.save}
           </button>
         </div>
       </form>

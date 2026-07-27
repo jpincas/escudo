@@ -1,10 +1,14 @@
 /* Escudo panel — brand palette and a plain, dense desktop layout.
-   No webfonts, no external requests: system font stack only.
+   Brand faces load from Google Fonts (index.html) — Bricolage Grotesque for
+   display, Public Sans for body. The panel's old "no webfonts, no external
+   requests" rule is lifted for this branding pass (spec 2.2): the brand
+   faces are the point of it, and the old rule had no requirement behind it.
 
    rojo-alarma is reserved for genuine alarm/danger semantics — the delete
    confirm and the "overdue"/"never" device statuses — never decoration.
-   Ámbar is the everyday accent. Keep that split; it's what makes the alarm
-   colour mean something when it appears. */
+   Ámbar is the everyday accent (including the Inbox sidebar count, §7).
+   Keep that split; it's what makes the alarm colour mean something when it
+   appears. */
 
 :root {
   --verde: #153f32;
@@ -15,7 +19,10 @@
   --rojo-alarma: #d24435;
 
   --border: #d8d6d0;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-fallback: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font: "Public Sans", var(--font-fallback);
+  --font-display: "Bricolage Grotesque", var(--font-fallback);
 }
 
 * {
@@ -36,8 +43,17 @@ body {
   line-height: 1.5;
 }
 
+/* Desktop-only, deliberately (spec 2.2): the admin's login code is delivered
+   to a phone precisely so it can be typed into a computer, so the panel is
+   never squinted at on a handset. */
 #root {
   min-width: 960px;
+}
+
+/* The centred, padded page used by the signed-out/loading/error states —
+   they keep today's plain full-page treatment, no sidebar. The signed-in
+   shell (below) lays out sidebar + content itself and doesn't use this. */
+.page {
   max-width: 1200px;
   margin: 0 auto;
   padding: 32px 40px 64px;
@@ -46,6 +62,8 @@ body {
 h1,
 h2,
 h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
   color: var(--verde);
   margin: 0 0 4px;
 }
@@ -116,20 +134,118 @@ button.button--danger-text:hover:not(:disabled) {
   border-color: transparent;
 }
 
+/* ── Shell (sidebar + section) ────────────────────────────────────── */
+
+.shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.sidebar {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--verde);
+  color: #fff;
+  padding: 28px 18px 20px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+  padding: 0 6px;
+}
+
+.sidebar__crest {
+  width: 36px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.sidebar__village {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.sidebar__sections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+}
+
+.sidebar__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 2px;
+  border-radius: 6px;
+  color: #d9e3de;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.sidebar__link:hover {
+  background: var(--verde-light);
+  color: #fff;
+}
+
+.sidebar__link--active {
+  background: var(--verde-light);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* The Inbox waiting-count (§7) — ámbar, never rojo-alarma: something to
+   attend to, not an alarm. */
+.sidebar__badge {
+  background: var(--ambar);
+  color: var(--tinta);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  line-height: 1.5;
+}
+
+.sidebar__foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 16px 6px 0;
+  margin-top: 16px;
+}
+
+.sidebar__admin {
+  color: #fff;
+  font-weight: 600;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.sidebar__signout {
+  width: 100%;
+}
+
+.shell__main {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 40px 64px;
+}
+
 /* ── Header ────────────────────────────────────────────────────────── */
 
 .app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
   padding-bottom: 20px;
   margin-bottom: 20px;
   border-bottom: 2px solid var(--verde);
-}
-
-.app-header__subtitle {
-  color: #55534c;
-  margin: 0;
 }
 
 /* ── Toolbar / empty state / loading / error ──────────────────────── */

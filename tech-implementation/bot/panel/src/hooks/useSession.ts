@@ -6,12 +6,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, exchangeToken, fetchSession, logout as apiLogout } from "../api/client.ts";
 import type { Me } from "../api/types.ts";
+import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
 
 type SessionState =
   | { status: "loading" }
   | { status: "signedIn"; me: Me }
-  | { status: "signedOut" }
-  | { status: "error"; message: string };
+  | { status: "signedOut"; locale: Locale }
+  | { status: "error"; message: string; locale: Locale };
 
 export function useSession(): {
   state: SessionState;
@@ -27,7 +28,7 @@ export function useSession(): {
       const token = url.searchParams.get("t");
 
       try {
-        const me = token ? await exchangeToken(token) : await fetchSession();
+        const result = token ? await exchangeToken(token) : await fetchSession();
 
         // Strip the one-time token immediately, whether it worked or not —
         // it must never sit in the URL bar, browser history or a bookmark,
@@ -38,11 +39,20 @@ export function useSession(): {
         }
 
         if (cancelled) return;
-        setState(me ? { status: "signedIn", me } : { status: "signedOut" });
+        setState(
+          result.signedIn
+            ? { status: "signedIn", me: result.me }
+            : { status: "signedOut", locale: result.locale },
+        );
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ApiError ? err.message : String(err);
-        setState({ status: "error", message });
+        // A locale on ApiError only ever comes from a 401 on a session
+        // route (see client.ts) — anything else reaching here is a genuine
+        // failure (network down, a 500, bad JSON) with no village to ask, so
+        // the fallback is the only honest answer.
+        const locale = err instanceof ApiError && err.locale ? err.locale : FALLBACK_LOCALE;
+        setState({ status: "error", message, locale });
       }
     }
 
@@ -57,7 +67,18 @@ export function useSession(): {
     // the session so the signed-out screen shows immediately. The cookie is
     // HttpOnly and short-lived either way.
     apiLogout().catch(() => {});
-    setState({ status: "signedOut" });
+    setState((prev) => ({
+      status: "signedOut",
+      // Carry the locale we already know from the session we're leaving,
+      // rather than falling back — the village doesn't change language
+      // because its admin signed out. `signOut` is only ever reachable from
+      // a signed-in screen, but every branch is covered defensively.
+      locale: prev.status === "signedIn"
+        ? prev.me.locale
+        : prev.status === "loading"
+        ? FALLBACK_LOCALE
+        : prev.locale,
+    }));
   }, []);
 
   return { state, signOut };

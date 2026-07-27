@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ApiError } from "../api/client.ts";
 import type { Device } from "../api/types.ts";
-import { fmt, strings } from "../strings.ts";
+import { useStrings } from "../i18n/context.tsx";
+import { t } from "../i18n/mod.ts";
 import { Modal } from "./Modal.tsx";
 
 interface ConfirmDeleteModalProps {
@@ -16,6 +17,7 @@ interface ConfirmDeleteModalProps {
  * so the admin should be reading the specific name they're about to cut off.
  */
 export function ConfirmDeleteModal({ device, onConfirm, onClose }: ConfirmDeleteModalProps) {
+  const s = useStrings();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,15 +28,15 @@ export function ConfirmDeleteModal({ device, onConfirm, onClose }: ConfirmDelete
       await onConfirm();
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : strings.genericError);
+      setError(err instanceof ApiError ? err.message : s.genericError);
       setBusy(false);
     }
   }
 
   return (
-    <Modal title={strings.deleteConfirm.heading} onClose={onClose}>
+    <Modal title={s.deleteConfirm.heading} onClose={onClose}>
       <p className="delete-confirm__body">
-        {fmt(strings.deleteConfirm.body, { label: device.label })}
+        {t(s.deleteConfirm.body, { label: device.label })}
       </p>
 
       {error && (
@@ -45,10 +47,10 @@ export function ConfirmDeleteModal({ device, onConfirm, onClose }: ConfirmDelete
 
       <div className="modal-actions">
         <button type="button" onClick={onClose} disabled={busy}>
-          {strings.deleteConfirm.cancel}
+          {s.deleteConfirm.cancel}
         </button>
         <button type="button" className="button--danger" onClick={handleConfirm} disabled={busy}>
-          {busy ? strings.deleteConfirm.deleting : strings.deleteConfirm.confirm}
+          {busy ? s.deleteConfirm.deleting : s.deleteConfirm.confirm}
         </button>
       </div>
     </Modal>

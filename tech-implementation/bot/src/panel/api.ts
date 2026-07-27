@@ -124,10 +124,15 @@ export function createPanelApi(
   api.post("/session/exchange", async (c) => {
     const body = await c.req.json().catch(() => null);
     const token = z.object({ token: z.string().min(1) }).safeParse(body);
-    if (!token.success) return c.json({ error: m.badLink }, 401);
+    // `locale` on a 401 here is not sensitive — it's how the panel's
+    // signed-out screen knows which language to use before any session
+    // exists (spec 2.3). See panel/src/api/client.ts's SessionResult.
+    if (!token.success) {
+      return c.json({ error: m.badLink, locale: config.village.locale }, 401);
+    }
 
     const session = await exchangeLink(store, token.data.token);
-    if (!session) return c.json({ error: m.badLink }, 401);
+    if (!session) return c.json({ error: m.badLink, locale: config.village.locale }, 401);
 
     c.header("set-cookie", sessionCookie(session.token, isSecure(c.req.url)));
     return c.json({
@@ -144,7 +149,7 @@ export function createPanelApi(
 
     const token = tokenFromCookies(c.req.header("cookie") ?? null);
     const session = token ? await store.getSession(token) : null;
-    if (!session) return c.json({ error: m.unauthorized }, 401);
+    if (!session) return c.json({ error: m.unauthorized, locale: config.village.locale }, 401);
 
     c.set("session", session);
     await next();

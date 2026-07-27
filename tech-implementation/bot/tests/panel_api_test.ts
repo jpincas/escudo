@@ -59,6 +59,25 @@ Deno.test("everything is refused without a session", async () => {
   assertEquals(post.status, 401);
 });
 
+// The panel SPA has no session yet at this point, so it can't read a locale
+// off `Me` — this is the only place it can come from (panel §2.3). Not
+// sensitive: it's the same locale the welcome page is about to show anyone.
+Deno.test("a 401 on either session route carries the village's locale", async () => {
+  const { api } = setup();
+
+  const noSession = await api.request(`${BASE}/session`);
+  assertEquals(noSession.status, 401);
+  assertEquals((await noSession.json()).locale, "es");
+
+  const badExchange = await api.request(`${BASE}/session/exchange`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: "not-a-real-token" }),
+  });
+  assertEquals(badExchange.status, 401);
+  assertEquals((await badExchange.json()).locale, "es");
+});
+
 Deno.test("a magic link signs in once and only once", async () => {
   const { api, store } = setup();
   const cookie = await signIn(api, store);

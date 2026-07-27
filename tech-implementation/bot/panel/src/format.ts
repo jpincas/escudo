@@ -8,12 +8,20 @@
 // panel renders in the browser's local timezone; that's the coordinator's
 // own machine, which for this single-village tool is the village.
 
-const formatter = new Intl.DateTimeFormat("es-ES", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+import type { Locale } from "./i18n/mod.ts";
+
+// "en" is generic international, not a translation of the Spanish (see
+// CLAUDE.md's brand rules) — en-GB for the same reason the English signage
+// uses UK-led emergency numbers, not US date conventions.
+const INTL_LOCALE: Record<Locale, string> = {
+  es: "es-ES",
+  en: "en-GB",
+};
 
 /** `null` (never proven) is the caller's business to label — this only formats a real timestamp. */
-export function formatDateTime(iso: string): string {
-  return formatter.format(new Date(iso));
+export function formatDateTime(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
 }

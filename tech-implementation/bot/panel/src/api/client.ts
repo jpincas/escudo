@@ -3,15 +3,23 @@
 // ({error: string} on any non-2xx) is honoured in exactly one spot.
 
 import type { Device, DeviceEdit, Me, NewDevice } from "./types.ts";
+import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
 
 /**
  * Thrown for any non-2xx response. `message` is always the server's own
  * `{error}` string where the backend supplied one — the UI must show that
  * verbatim, never invent its own wording, since it may name the exact
- * validation problem (e.g. "msisdn already registered").
+ * validation problem (e.g. "msisdn already registered"). `locale` is carried
+ * only by the session endpoints (see SessionResult below) — it's how a
+ * signed-out visitor's screen knows which language to use, since there is no
+ * session yet to read a locale from.
  */
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly locale?: Locale,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -36,23 +44,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => null) as { error?: string } | null;
-    throw new ApiError(res.status, body?.error ?? GENERIC_ERROR);
+    const body = await res.json().catch(() => null) as
+      | { error?: string; locale?: Locale }
+      | null;
+    throw new ApiError(res.status, body?.error ?? GENERIC_ERROR, body?.locale);
   }
 
   return res.json() as Promise<T>;
 }
 
 /**
- * The current admin, or `null` if signed out. A 401 here is an expected,
- * everyday outcome (the cookie expired, or this is a first visit) — it is
- * not surfaced as an error.
+ * Either an admin, or the deployment's locale with nobody signed in. Unlike a
+ * bare `Me | null`, the "not signed in" case still carries something — the
+ * one piece of the session response that isn't sensitive and is needed
+ * before any session exists: which language to greet the visitor in. The
+ * backend puts it on the 401 body precisely so this works (see
+ * src/panel/api.ts's `MESSAGES` + the `locale` field on both 401s).
  */
-export async function fetchSession(): Promise<Me | null> {
+export type SessionResult =
+  | { signedIn: true; me: Me }
+  | { signedIn: false; locale: Locale };
+
+/**
+ * Resolves the session. A 401 here is an expected, everyday outcome (the
+ * cookie expired, or this is a first visit) — it is not surfaced as an error.
+ */
+export async function fetchSession(): Promise<SessionResult> {
   try {
-    return await request<Me>("/api/session");
+    const me = await request<Me>("/api/session");
+    return { signedIn: true, me };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return null;
+    if (err instanceof ApiError && err.status === 401) {
+      return { signedIn: false, locale: err.locale ?? FALLBACK_LOCALE };
+    }
     throw err;
   }
 }
@@ -63,14 +87,17 @@ export async function fetchSession(): Promise<Me | null> {
  * same as "signed out", not as a fetch failure, since the fix is the same
  * either way: go back to Telegram for a fresh link.
  */
-export async function exchangeToken(token: string): Promise<Me | null> {
+export async function exchangeToken(token: string): Promise<SessionResult> {
   try {
-    return await request<Me>("/api/session/exchange", {
+    const me = await request<Me>("/api/session/exchange", {
       method: "POST",
       body: JSON.stringify({ token }),
     });
+    return { signedIn: true, me };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return null;
+    if (err instanceof ApiError && err.status === 401) {
+      return { signedIn: false, locale: err.locale ?? FALLBACK_LOCALE };
+    }
     throw err;
   }
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { previewAlert, sendTestAlert } from "../api/client.ts";
 import type { Device } from "../api/types.ts";
-import { fmt, strings } from "../strings.ts";
+import { useStrings } from "../i18n/context.tsx";
+import { t } from "../i18n/mod.ts";
 
 interface TestAlertModalProps {
   device: Device;
@@ -24,7 +25,7 @@ interface TestAlertModalProps {
  * neighbours may put their boots on.
  */
 export function TestAlertModal({ device, categories, onClose }: TestAlertModalProps) {
-  const s = strings.testAlert;
+  const s = useStrings().testAlert;
   const [category, setCategory] = useState(categories[0] ?? "emergencia");
   const [preview, setPreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -59,7 +60,7 @@ export function TestAlertModal({ device, categories, onClose }: TestAlertModalPr
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{s.heading}</h2>
-        <p>{fmt(s.intro, { label: device.label })}</p>
+        <p>{t(s.intro, { label: device.label })}</p>
 
         {/* The rendered message, shown as Telegram would show it. */}
         <div

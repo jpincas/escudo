@@ -1,4 +1,4 @@
-import { strings } from "../strings.ts";
+import { useStrings } from "../i18n/context.tsx";
 
 /**
  * Full-width error state for a failed request. `onRetry` is optional because
@@ -6,12 +6,13 @@ import { strings } from "../strings.ts";
  * modal handles its own retry by just letting the user resubmit).
  */
 export function ErrorView({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const s = useStrings();
   return (
     <div className="error-view" role="alert">
       <p>{message}</p>
       {onRetry && (
         <button type="button" onClick={onRetry}>
-          {strings.retry}
+          {s.retry}
         </button>
       )}
     </div>

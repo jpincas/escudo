@@ -1,11 +1,9 @@
-// Every piece of UI copy in the panel, in one place. The village-facing
-// language is Spanish (the admin using this tool is a volunteer, not a
-// developer); keeping every string here — instead of inline in components —
-// is what makes a future translation a one-file job instead of a hunt.
+import type { Strings } from "./types.ts";
 
-import type { DeviceKind, DeviceStatus } from "./api/types.ts";
-
-export const strings = {
+// The shipped, village-read wording — carried over verbatim from the old
+// src/strings.ts rather than re-translated, since this is the copy Bercianos
+// actually reads today. Only the placeholder syntax changed (%name% -> {name}).
+export const es: Strings = {
   appTitle: "Escudo — Panel",
 
   signedOut: {
@@ -18,10 +16,32 @@ export const strings = {
   genericError: "Ha ocurrido un error inesperado. Inténtalo de nuevo.",
   retry: "Reintentar",
 
-  header: {
-    // "%s" placeholders — see fmt() below.
-    subtitle: "%village% · %name%",
+  sidebar: {
+    navLabel: "Secciones del panel",
+    devices: "Dispositivos",
+    inbox: "Bandeja de entrada",
+    history: "Historial",
+    config: "Configuración",
     signOut: "Cerrar sesión",
+  },
+
+  placeholder: {
+    inbox: {
+      heading: "Bandeja de entrada",
+      body: "Aquí aparecerán los números que han llamado a Escudo sin estar " +
+        "registrados, listos para darlos de alta como dispositivo. Todavía no " +
+        "está construido.",
+    },
+    history: {
+      heading: "Historial",
+      body: "Aquí se podrá consultar lo que ha pasado en el pueblo: cada " +
+        "alerta, quién la dio y cuándo. Todavía no está construido.",
+    },
+    config: {
+      heading: "Configuración",
+      body: "Aquí se podrá editar la información pública del pueblo: nombre, " +
+        "foto, teléfono y las personas responsables. Todavía no está construido.",
+    },
   },
 
   devices: {
@@ -46,14 +66,14 @@ export const strings = {
       ok: "Correcto",
       overdue: "Caducado",
       never: "Nunca probado",
-    } satisfies Record<DeviceStatus, string>,
+    },
     kind: {
       base: "Base con colgante",
       wearable: "Colgante o reloj",
       phone: "Teléfono",
       alarm: "Alarma de vivienda",
       other: "Otro",
-    } satisfies Record<DeviceKind, string>,
+    },
     edit: "Editar",
     delete: "Eliminar",
   },
@@ -74,9 +94,8 @@ export const strings = {
   },
 
   deleteConfirm: {
-    // "%label%" — see fmt() below.
     heading: "Eliminar dispositivo",
-    body: 'Vas a eliminar "%label%". A partir de ese momento, este domicilio ya ' +
+    body: 'Vas a eliminar "{label}". A partir de ese momento, este domicilio ya ' +
       "no podrá dar la alarma con este dispositivo. Esta acción no se puede deshacer.",
     confirm: "Eliminar dispositivo",
     cancel: "Cancelar",
@@ -84,10 +103,9 @@ export const strings = {
   },
 
   testAlert: {
-    // "%label%" — see fmt() below.
     action: "Probar",
     heading: "Lanzar una alerta de prueba",
-    intro: 'Así se vería la alerta de "%label%" en el grupo:',
+    intro: 'Así se vería la alerta de "{label}" en el grupo:',
     loading: "Preparando la vista previa…",
     warning: "El grupo recibirá esta alerta como una alerta real. Los vecinos " +
       "no sabrán que es una prueba, y pueden ponerse en camino. Avisa antes.",
@@ -99,17 +117,4 @@ export const strings = {
     duplicate: "Ya había una alerta abierta de este dispositivo, así que no se " +
       "ha enviado otra.",
   },
-} as const;
-
-/**
- * Fills `%name%`-style placeholders in a template string. A tiny stand-in for
- * a real i18n library, matching the constraint that the panel has no
- * dependency beyond react — the bot's own `src/i18n` is unavailable here
- * since it's a separate Deno app.
- */
-export function fmt(template: string, values: Record<string, string>): string {
-  return Object.entries(values).reduce(
-    (result, [key, value]) => result.replaceAll(`%${key}%`, value),
-    template,
-  );
-}
+};
