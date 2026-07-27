@@ -94,4 +94,15 @@ export const en: Strings = {
   error: {
     generic: "Something went wrong. If this is an emergency, call the emergency services directly.",
   },
+
+  welcome: {
+    heading: "The Escudo Network of {village}",
+    tagline: "Communities that respond",
+    adminLogin: "Admin login",
+    escudoNumberLabel: "Escudo number",
+    emergencyLineIntro:
+      "Escudo supplements the emergency services — it never replaces them. In an emergency, call first:",
+    photoAlt: "Photo of the village",
+    responsiblePeopleHeading: "Responsible people",
+  },
 };

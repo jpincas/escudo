@@ -113,4 +113,31 @@ export interface Strings {
   error: {
     generic: string;
   };
+
+  /**
+   * The public welcome page (spec 2026-07-27 §4) — the deployment's own root,
+   * open to anyone, no session. Distinct in kind from everything else in this
+   * file (which the *bot* says over Telegram): this is what a visitor's
+   * browser renders. Kept here anyway, deliberately, for the one guarantee
+   * that matters more than the boundary — a locale missing a string below
+   * fails `deno check`, not a villager's phone.
+   */
+  welcome: {
+    /** <title> and page heading. {village} */
+    heading: string;
+    /** The brand tagline, shown under the heading — also present with an
+     *  empty profile, so the page never looks bare. */
+    tagline: string;
+    /** Link at the top of the page to the admin login (→ /panel). */
+    adminLogin: string;
+    /** Label over the Escudo phone number — the page's most important line. */
+    escudoNumberLabel: string;
+    /** Heading over the official emergency line. Must say plainly that
+     *  Escudo supplements the authorities and never replaces them. */
+    emergencyLineIntro: string;
+    /** Alt text for the village photo, if one is set. */
+    photoAlt: string;
+    /** Heading over the list of responsible people. */
+    responsiblePeopleHeading: string;
+  };
 }

@@ -29,6 +29,10 @@ const ALLOWED = new Set([
   "store/kv.ts",
   "store/memory.ts",
   "panel/api.ts",
+  // The welcome page (§4) is the profile's other intended consumer, named
+  // explicitly in spec 3.3: "Its only two consumers are the welcome page and
+  // its own editor screen." Added deliberately, not to weaken this test.
+  "web/welcome.ts",
 ]);
 
 /** Any of these appearing outside an allowed file means it reaches the profile. */

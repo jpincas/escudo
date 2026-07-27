@@ -26,6 +26,7 @@ import { createBridge } from "./src/bridge/twilio.ts";
 import { createZadarmaBridge } from "./src/bridge/zadarma.ts";
 import { loadConfig } from "./src/config.ts";
 import { createPanelApi } from "./src/panel/api.ts";
+import { createWelcomeApi } from "./src/web/welcome.ts";
 import { KvStore } from "./src/store/kv.ts";
 import { issueLink } from "./src/panel/auth.ts";
 import { createBot, publishCommands } from "./src/telegram/bot.ts";
@@ -181,6 +182,11 @@ web.route(
     alerts: new AlertService(config, store, makeNotifier()),
   }),
 );
+// The public welcome page (§4, spec 2026-07-27): the deployment's own root,
+// open to anyone with no session. Mounted on this same router, so it still
+// runs after the alert path above has declined the request — nothing about
+// where the webhook, the bridge and /health are matched, above, changes.
+web.route("/", createWelcomeApi(config, store));
 // Anchor the SPA's files to this module's own directory, not the process CWD.
 // hono's serveStatic resolves a relative `root` against Deno.cwd(), which is not
 // guaranteed to be the app directory on Deploy — and a wrong CWD is a silent

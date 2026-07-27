@@ -91,4 +91,15 @@ export const es: Strings = {
     generic:
       "Ha habido un problema. Si es una emergencia, llama directamente a los números de emergencia.",
   },
+
+  welcome: {
+    heading: "Red Escudo de {village}",
+    tagline: "Comunidades que responden",
+    adminLogin: "Acceso administración",
+    escudoNumberLabel: "Número Escudo",
+    emergencyLineIntro:
+      "Escudo no sustituye a las autoridades. Ante una emergencia, llama primero a:",
+    photoAlt: "Foto del pueblo",
+    responsiblePeopleHeading: "Personas responsables",
+  },
 };
