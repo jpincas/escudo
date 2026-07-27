@@ -187,12 +187,32 @@ unsigned or wrongly signed request raises nothing and doesn't even reach the
 inbox; with no secret configured the route is not mounted at all. An open bridge
 is a URL anyone can use to wake the village at 3am.
 
-Zadarma authenticates in three layers, and the bridge uses all of them. A one-off
-`zd_echo` handshake proves the URL is ours when the webhook is first configured.
-Every subsequent request carries a `Signature` header — base64 of an HMAC-SHA1 over
-the sorted parameters, keyed with the account secret — which is checked before
-anything else happens. And their notifications originate from 185.45.152.40/30, so
-anything from outside that range is refused on sight.
+A one-off `zd_echo` handshake proves the URL is ours when the webhook is first
+configured — Zadarma calls it on save and will not accept a URL that does not
+echo the nonce back. Every subsequent request then carries a `Signature` header,
+which is what the bridge actually turns on: an HMAC-SHA1 keyed with the account
+secret, over `caller_id` + `called_did` + `call_start` concatenated. So the
+signature covers the caller and the time — precisely the two facts the alarm
+depends on — rather than the whole body.
+
+**The digest is hex-encoded before it is base64'd,** and this is worth writing
+down because it cost a morning. PHP's `hash_hmac()` returns lowercase hexits
+unless asked for binary, and Zadarma's reference library never asks; their prose
+says only "SHA1, then base64", which reads like the binary form. Sign the raw 20
+bytes and every genuine call is refused as unsigned. A test that reimplements the
+scheme is not enough of a guard — ours reimplemented the same misreading and
+agreed with the bug — so `tests/zadarma_test.ts` carries a golden vector computed
+outside the codebase, and asserts that the plausible wrong encoding is rejected.
+
+Their notifications originate from 185.45.152.40/30, and the bridge can refuse
+anything outside it. **This is off by default.** It was on, and it refused every
+real call in Bercianos: the address Deploy's proxy reports is not one of
+Zadarma's, and the failure is invisible from the village — the phone rings, the
+greeting plays, and nobody is told. An IP allowlist on the alarm path can only
+ever fail closed, so it has to earn its place, and it cannot here: anyone able to
+forge the signature holds the account secret, and with it the API, the call logs
+and the balance. It stays available for a deployment behind a proxy whose header
+has been verified with a real call, and off everywhere else.
 
 **The SMS rules are retained, dormant.** `/bridge/sms` and its handling — any
 message from a registered number is an alarm, a lat/lon in the body becomes a pin,
@@ -203,15 +223,29 @@ that sells a mobile number with inbound SMS, the path is already built.
 
 ### As built
 
-`POST /bridge/voice` and `POST /bridge/sms`, in `src/bridge/twilio.ts`. Matched
-ahead of the web router and sharing no code with it, on the same rule as the
-Telegram webhook: an alarm must never queue behind a panel page.
+**Live in Bercianos since 27 July 2026.** A call to the León number plays the
+greeting and raises the group; that was the bar, and it is met.
 
-Written against Twilio, which is not the supplier any more. The shape survives —
-a form POST carrying a sender, turned into an alert — so what changes is the
-signature check, the field names (`caller_id` rather than `From`), the `zd_echo`
-handshake, and the answer that plays the recording. `raiseAlert()`, the registry
-lookup, the dedupe window and the unregistered-number path are all untouched.
+`POST /bridge/voice`, in `src/bridge/zadarma.ts`. Matched ahead of the web router
+and sharing no code with it, on the same rule as the Telegram webhook: an alarm
+must never queue behind a panel page. `src/bridge/twilio.ts` stays alongside it
+for anywhere that can buy a number doing both calls and SMS, which Spain cannot;
+Zadarma takes precedence when both are configured. What the two share —
+`raiseAlert()`, the registry lookup, the dedupe window, the unregistered-number
+path — lives in `src/bridge/inbound.ts` and is supplier-agnostic.
+
+**What the caller hears comes from Zadarma's own PBX, not from us.** The reply to
+`NOTIFY_START` can name an uploaded recording and hang up, and that is the
+design; Bercianos has no recording uploaded yet, so the bridge replies with an
+empty object and lets the PBX main menu read its text-to-speech greeting instead.
+An empty reply means "carry on", not "nothing happened" — replying `hangup` with
+no recording of our own would cut off the one confirmation the caller gets.
+
+`deno task test-call` sends exactly what Zadarma sends, signature and all, and
+checks the `zd_echo` handshake separately. What it cannot prove is anything
+upstream of the app — that the number is routed to the PBX, and that
+`notify_start` is enabled — and those are where a bridge that passes every test
+still stays silent.
 
 `raiseAlert()`'s dedupe window still earns its place: a pendant that dials two or
 three numbers in sequence, or a caller who redials because they are frightened,
@@ -366,14 +400,12 @@ people already own — costs nothing at all and covers the largest group.
 
 ## Open items
 
-- **Buy the León number and port the bridge to Zadarma.** The routes and the
-  registry are written and tested; what changes is the signature check, the field
-  names, the `zd_echo` handshake and the answer. The bar is a call from an Orange
-  handset raising a real alert in the village group, and the recording playing
-  back — not a documented webhook.
 - **Record the message.** One take, Castilian, unhurried, no music. It is the
   first thing a frightened person hears, and it should sound like a neighbour
-  rather than a call centre.
+  rather than a call centre. Until it exists the PBX reads a synthesised greeting,
+  which works and sounds like a machine. Upload it in the Zadarma voice menu and
+  set `ESCUDO_ZADARMA_IVR_PLAY_ID` to its id; the bridge then plays it and hangs
+  up, without a code change.
 - **Build the inbox screen** (§5.1) — registration by ringing the bridge, not by
   typing. The store and the API behind it are done; the panel page is not.
 - **The test window** (§6), which is the only thing that makes a green *Correcto*

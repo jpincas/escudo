@@ -13,7 +13,7 @@ unconscious, or the hands won't manage a keypad.
 
 One line, and it's the only thing Escudo asks:
 
-> **It must be able to call or send an SMS to a stored number.**
+> **It must be able to call a stored number.**
 
 That is genuinely the whole specification. It rules almost nothing out, which is
 the point: the person picks the shape that suits them rather than the shape a

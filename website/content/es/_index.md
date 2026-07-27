@@ -72,9 +72,9 @@ riesgo — y que nadie conteste *es* el aviso.
   [Cómo funciona]({{< relref "/tecnologia/telegram" >}}).
 - ☑ **El escudo, los carteles y las pegatinas, diseñados** y
   [a libre disposición]({{< relref "/recursos" >}}).
-- ◐ **La capa de dispositivos está construida, a falta de un número de
-  teléfono** — para que un colgante, una base de pared o un teléfono normal
-  también puedan dar la alarma.
+- ☑ **La capa de teléfonos está en marcha** — el pueblo tiene un número de León,
+  y llamarlo levanta al grupo. Ya puede dar la alarma un teléfono normal; un
+  colgante o una base de pared también, en cuanto una casa tenga uno.
   [Cómo funciona]({{< relref "/tecnologia/dispositivos" >}}).
 - ◐ **Este sitio es la propuesta** al Ayuntamiento y a la Junta Vecinal,
   escrita en abierto.

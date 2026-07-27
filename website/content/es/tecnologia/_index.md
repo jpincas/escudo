@@ -19,11 +19,11 @@ flowchart LR
   dev["🔘 Aparato registrado<br/><i>colgante · base</i>"]
   tg["📱 Vecino<br/>en Telegram"]
 
-  tw["Twilio<br/><i>tiene el número<br/>Escudo +34</i>"]
+  tw["Zadarma<br/><i>tiene el número<br/>Escudo +34</i>"]
   tgapi["API del bot<br/>de Telegram"]
 
   subgraph srv["El servidor Escudo — una sola app Deno"]
-    routes["Rutas webhook<br/><i>/bridge/voice · /bridge/sms<br/>/&lt;secreto de Telegram&gt;</i>"]
+    routes["Rutas webhook<br/><i>/bridge/voice<br/>/&lt;secreto de Telegram&gt;</i>"]
     core["AlertService<br/><i>antirrebote · buscar la casa<br/>escribir el registro</i>"]
     web["Panel de admin<br/><i>/panel · /api</i>"]
     kv["🗄 Deno KV<br/><i>aparatos · incidencias<br/>miembros · sesiones</i>"]
@@ -36,10 +36,10 @@ flowchart LR
   nb["🏃 Los vecinos<br/>acuden"]
   coord["👤 Coordinador"]
 
-  ph -.-> tw
+  ph --> tw
   dev -.-> tw
   tg --> tgapi
-  tw <-.->|"webhook entra<br/>Reject sale"| routes
+  tw <-->|"llamada entra<br/>locución sale"| routes
   tgapi <-->|"updates entran<br/>sendMessage sale"| routes
   tgapi --> group
   group --> nb
@@ -50,41 +50,44 @@ flowchart LR
   classDef todo fill:#f7f8f6,stroke:#9aa39b,color:#6b7770,stroke-dasharray:5 4
   classDef out fill:#e0a12e,stroke:#a9701a,color:#22201c
   classDef store fill:#ffffff,stroke:#153f32,color:#22201c
-  class tg,tgapi,routes,core,web done
-  class ph,dev,tw todo
+  class tg,tgapi,routes,core,web,ph,tw done
+  class dev todo
   class group,nb,coord out
   class kv store
   style srv fill:#f7f8f6,stroke:#153f32,stroke-width:2px
 ```
 
-Las líneas continuas están hechas y funcionando. Las discontinuas están escritas
-y probadas, y entran en servicio el día que el pueblo tenga un número de teléfono
-propio.
+Las líneas continuas están hechas y funcionando. La discontinua está escrita y
+probada, y entra en servicio el día que una casa tenga un aparato que dar de
+alta.
 
 **El bot de Telegram no es el centro de este sistema.** Es una forma de entrar y
 la forma en que salen los mensajes: un transporte, no un enrutador. El centro es
 un solo programa pequeño, el servidor Escudo, y todo lo demás se enchufa a él:
 
-- **Tres webhooks de entrada, un solo proceso.** Telegram manda las pulsaciones a
-  una ruta secreta; Twilio manda las llamadas a `/bridge/voice` y los mensajes a
-  `/bridge/sms`. Las rutas de Twilio comprueban una firma en cada petición y no
-  se montan siquiera sin una clave, porque un puente abierto es un número de
-  teléfono con el que cualquiera puede levantar al pueblo.
+- **Dos webhooks de entrada, un solo proceso.** Telegram manda las pulsaciones a
+  una ruta secreta; Zadarma manda las llamadas entrantes a `/bridge/voice`. El
+  puente comprueba una firma en cada petición y no se monta siquiera sin la
+  clave, porque un puente abierto es un número de teléfono con el que cualquiera
+  puede levantar al pueblo.
 - **`AlertService` es donde una alarma se convierte en aviso**: descarta
   pulsaciones repetidas, convierte un número de teléfono en una casa y una
   dirección, escribe la incidencia y le pasa el mensaje ya montado a Telegram
   para que lo publique.
-- **La llamada de voz no se coge nunca.** Lo que el servidor le responde al
-  webhook de Twilio es un rechazo, que suelta la llamada antes de que se
-  establezca: así no se le cobra a nadie y quien llama la oye dar tono.
+- **El aviso sale mientras el teléfono todavía está sonando.** Zadarma avisa al
+  dar tono, no al descolgar, así que quien se asusta y cuelga a los dos tonos ya
+  ha levantado al pueblo. Sólo después se coge la llamada, con un mensaje
+  grabado: *aviso recibido, viene ayuda*. Un tono que se pierde no le dice nada a
+  una persona asustada en el suelo, y la invita a colgar y volver a intentarlo;
+  una voz es la diferencia entre esperar que haya funcionado y saberlo.
 - **El panel de administración es parte del mismo programa**, pero a propósito no
   es parte de la vía de aviso: comparte la base de datos y nada más, y las rutas
   de alarma se atienden antes que él, así que un fallo en una página del panel no
   puede retrasar una alarma.
-- **Las otras llamadas del aparato se saltan todo esto.** Después de mandar el
-  SMS al número Escudo, llama a dos o tres vecinos directamente, por la red
-  telefónica de siempre. Esa llamada es el acuse de recibo, y funciona aunque
-  este servidor esté caído.
+- **Las otras llamadas del aparato se saltan todo esto.** Después de llamar al
+  número Escudo, llama a dos o tres vecinos directamente, por la red telefónica
+  de siempre. Esa llamada es el acuse de recibo, y funciona aunque este servidor
+  esté caído.
 
 Las puertas existen porque sirven a gente distinta:
 
@@ -95,8 +98,8 @@ Las puertas existen porque sirven a gente distinta:
 | **Un aparato dado de alta** | No puede manejar un teléfono en una urgencia, o está inconsciente | Lo compra la familia |
 
 Nada de lo que viene después distingue por qué puerta entró un aviso. Una llamada
-o un mensaje desde un número dado de alta se convierte en una alerta corriente,
-con el mismo antirrebote, el mismo botón de falsa alarma y el mismo registro.
+desde un número dado de alta se convierte en una alerta corriente, con el mismo
+antirrebote, el mismo botón de falsa alarma y el mismo registro.
 
 ## Cómo está
 
@@ -106,14 +109,17 @@ en cualquier teléfono y una comunidad la adopta editando un solo archivo de
 configuración.
 
 **La [capa de teléfonos y aparatos]({{< relref "/tecnologia/dispositivos" >}})
-está escrita y probada, a la espera de un número de teléfono.** Cubre a todos los
-que un smartphone no alcanza: el vecino que tiene teléfono pero no Telegram, y
-quien no puede manejar un teléfono tirado en el suelo de la cocina. Escudo no
-vende ni elige aparatos: publica un único requisito, *tiene que poder llamar o
-mandar un SMS a un número guardado*, y sirve cualquier cosa que lo cumpla. El
-registro, la vía de aviso y el panel de administración están hechos; lo que falta
-es comprar el número, que en España es cuestión de un CIF y una dirección en el
-pueblo más que de dinero.
+está en marcha.** Bercianos tiene un número de León, y llamarlo levanta al grupo
+del pueblo. Cubre a todos los que un smartphone no alcanza: el vecino que tiene
+teléfono pero no Telegram, y quien no puede manejar un teléfono tirado en el
+suelo de la cocina. Escudo no vende ni elige aparatos: publica un único
+requisito, *tiene que poder llamar a un número guardado*, y sirve cualquier cosa
+que lo cumpla.
+
+Lo que falta es aparato, no programa. Todavía no se ha comprado ni probado
+ningún colgante ni ninguna unidad de pared en una casa de verdad, y hasta que se
+haga, aquí no se recomienda ningún modelo. Dar de alta los teléfonos que la gente
+ya tiene no necesita nada de eso y llega al grupo más numeroso del pueblo.
 
 
 ## Despliegue

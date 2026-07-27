@@ -36,12 +36,12 @@ There are three ways in, and the family picks:
 **Start with the middle one.** If the person carries a phone and can press a
 speed-dial key, that phone is already an Escudo button and it costs nobody
 anything —
-[a missed call is an alarm]({{< relref "/technology/devices/the-escudo-number" >}}#a-missed-call-is-an-alarm).
+[a call is an alarm]({{< relref "/technology/devices/the-escudo-number" >}}).
 Buy a device when there's a reason a phone won't do: it has to be worn, or it has
 to work when the person is unconscious, or the hands won't manage a keypad.
 
 **Escudo doesn't sell, choose or recommend hardware.** The requirement is one
-line — it must be able to call or send an SMS to a stored number — and the family
+line — it must be able to call a stored number — and the family
 buys whatever shape suits them. Show them what the requirement means in a shop,
 then leave the choice with them.
 
@@ -81,12 +81,13 @@ health is recorded, and there's nowhere to write it.
 
 While you're there, do the part that decides how it feels:
 
-- **Who the device rings** after it texts the Escudo number. Two or three neighbours who
+- **Who the device rings** after the Escudo number. Two or three neighbours who
   are usually in, family last. The person answering talks to them over the
   hands-free unit while they're still on the floor, so this call is the
   acknowledgment — the proof that somebody heard.
-- **Press it once, for real.** Let them hear a familiar voice answer. That's the
-  moment they learn the thing costs nothing to use.
+- **Press it once, for real.** Let them hear the recorded message, then a
+  familiar voice answer. That's the moment they learn nobody is going to be
+  cross with them for using it.
 - **The SIM.** A prepaid Spanish SIM dies after four to nine months without a
   recharge. Note whose it is and when it was last topped up. This is the
   coordinator's job, not the family's, because it fails silently.

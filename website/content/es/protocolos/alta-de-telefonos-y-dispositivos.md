@@ -37,13 +37,13 @@ Hay tres formas de entrar, y la elige la familia:
 **Empieza por el del medio.** Si la persona lleva un teléfono encima y puede
 pulsar una tecla de marcado rápido, ese teléfono ya es un botón Escudo y no le
 cuesta nada a nadie —
-[una llamada perdida es una alarma]({{< relref "/tecnologia/dispositivos/el-numero-escudo" >}}#una-llamada-perdida-es-una-alarma).
+[una llamada es una alarma]({{< relref "/tecnologia/dispositivos/el-numero-escudo" >}}).
 Compra un dispositivo cuando haya un motivo de peso para que un teléfono no
 valga: tiene que llevarse puesto, o tiene que funcionar con la persona
 inconsciente, o las manos ya no manejan un teclado.
 
 **Escudo no vende, elige ni recomienda ningún aparato.** El requisito cabe en
-una línea — tiene que poder llamar o mandar un SMS a un número guardado — y la
+una línea — tiene que poder llamar a un número guardado — y la
 familia compra la forma que mejor le vaya. Enséñales lo que significa ese
 requisito en una tienda, y deja que decidan ellos.
 
@@ -86,13 +86,13 @@ sobre la salud de nadie, y no hay dónde escribirlo.
 
 Ya que estás allí, haz la parte que decide cómo se vive:
 
-- **A quién llama el dispositivo** después de avisar por SMS al número
-  Escudo. Dos o tres vecinos que suelen estar en casa, la familia la última.
-  Quien responde le habla por el manos libres mientras la persona sigue en el
-  suelo, así que esa llamada es la confirmación — la prueba de que alguien lo
-  ha oído.
-- **Pulsarlo una vez, de verdad.** Que oigan responder una voz conocida. Ese
-  es el momento en que aprenden que usarlo no cuesta nada.
+- **A quién llama el dispositivo** después del número Escudo. Dos o tres
+  vecinos que suelen estar en casa, la familia la última. Quien responde le
+  habla por el manos libres mientras la persona sigue en el suelo, así que esa
+  llamada es la confirmación — la prueba de que alguien lo ha oído.
+- **Pulsarlo una vez, de verdad.** Que oigan la locución y después una voz
+  conocida. Ese es el momento en que aprenden que nadie se va a enfadar con
+  ellos por usarlo.
 - **La SIM.** Una SIM de prepago española caduca a los cuatro o nueve meses
   sin recarga. Anota de quién es y cuándo se recargó por última vez. Esto es
   trabajo del coordinador, no de la familia, porque falla en silencio.

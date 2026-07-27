@@ -69,8 +69,9 @@ the alert.
   [How it works]({{< relref "/technology/telegram" >}}).
 - ☑ **Crest, signs and stickers designed** and
   [free to take]({{< relref "/resources" >}}).
-- ◐ **The device layer is built, waiting on a phone number** — so a pendant, a
-  wall unit or an ordinary phone can raise the alarm too.
+- ☑ **The phone layer is live** — the village has a León number, and ringing it
+  raises the group. An ordinary phone can now raise the alarm; a pendant or a
+  wall unit can too, once a household has one.
   [How it works]({{< relref "/technology/devices" >}}).
 - ◐ **This site is the proposal** to the Ayuntamiento and the Junta Vecinal,
   written in the open.

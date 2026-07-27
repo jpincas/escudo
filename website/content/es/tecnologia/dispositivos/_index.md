@@ -40,7 +40,7 @@ que es algo que este proyecto se niega a tener de todas formas.
 Lo que Escudo publica en su lugar es un único requisito, y sirve cualquier cosa
 que lo cumpla:
 
-> **Tiene que poder llamar o mandar un SMS a un número guardado.**
+> **Tiene que poder llamar a un número guardado.**
 
 Ésa es toda la especificación. La cumple cualquier aparato de teleasistencia que
 se venda en España, en cualquier formato, y también un Nokia de hace quince años.

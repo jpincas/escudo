@@ -14,7 +14,7 @@ teclado.
 
 Una línea, y es lo único que pide Escudo:
 
-> **Tiene que poder llamar o mandar un SMS a un número guardado.**
+> **Tiene que poder llamar a un número guardado.**
 
 Ésa es de verdad toda la especificación. No descarta casi nada, y de eso se
 trata: la persona elige el formato que le encaja, en vez del formato que compró

@@ -26,6 +26,32 @@ relevant heading.
   erases the record; scolding about the false alarm makes the next person hesitate before pressing.
   Both are against the Protocolo Escudo.
 
+## The call bridge (Zadarma)
+
+- **The `Signature` is base64 of the _hex_ HMAC-SHA1, not of the raw digest.** PHP's `hash_hmac()`
+  returns lowercase hexits unless asked for binary and Zadarma's reference library never asks, while
+  their docs say only "SHA1, then base64". Sign the 20 bytes and every genuine call is refused with
+  `rejected an unsigned call notification` — which reads like an attack and is actually us. The
+  golden vector in `tests/zadarma_test.ts` exists because reimplementing the scheme in the test was
+  not enough: the first version repeated the same misreading and agreed with the bug.
+
+- **Don't turn the source-IP check back on without proving it.** `ESCUDO_BRIDGE_CHECK_SOURCE_IP`
+  defaults to false because on Deno Deploy the `x-forwarded-for` address is not one of Zadarma's, so
+  it refused every real call — and the failure is invisible from the village, because the phone
+  still rings and the PBX still answers. The signature is the lock that matters. If you do enable
+  it, verify with an actual call, not with `test-call`.
+
+- **A silent group is usually an unregistered number, not a broken bridge.** An unknown caller goes
+  to the panel inbox by design. Check there before suspecting anything else.
+
+- **`deno task test-call` cannot prove the Zadarma side.** It exercises everything from the HTTP
+  request inwards. Whether the number is routed to the PBX, and whether `notify_start` is enabled,
+  are upstream of the app and are exactly where a bridge that passes every test stays silent.
+
+- **An empty reply to `NOTIFY_START` is not a missing one.** With no recording configured the bridge
+  returns `{}` so the PBX's own greeting runs. Replying `{hangup: 1}` there cuts it off and leaves
+  the caller with the silence the answer exists to prevent.
+
 ## Telegram
 
 - **Parse mode is HTML, not MarkdownV2.** MarkdownV2 requires escaping sixteen characters including

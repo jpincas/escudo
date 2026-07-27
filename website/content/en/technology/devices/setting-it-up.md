@@ -17,9 +17,9 @@ every registered phone stores the same number.
 
 | | Why |
 |---|---|
-| The Escudo server, deployed and reachable at a fixed `https://` address | Twilio has to POST to it, and it must be the *same* address every time |
-| A Twilio account | Or another provider that POSTs inbound calls and texts to a URL |
-| A Spanish tax ID — CIF for an association, NIF for a person | Required to hold a +34 number. Not a Twilio rule: it's CNMC numbering policy, so every provider asks |
+| The Escudo server, deployed and reachable at a fixed `https://` address | The provider has to POST to it, and it must be live *before* you configure the webhook |
+| A [Zadarma](https://zadarma.com) account | Or another provider that POSTs inbound calls to a URL. Bercianos uses Zadarma: the cloud PBX is free and incoming calls are free |
+| A Spanish tax ID — CIF for an association, NIF for a person | Required to hold a +34 number. Not a provider rule: it's CNMC numbering policy, so every provider asks |
 | Proof of an address in the village | Utility bill, tax notice, rent receipt, title deed. A **certificado de empadronamiento** is worth trying if the bill isn't in your name. No PO boxes |
 
 The paperwork is the slow part — expect a document review, not an instant
@@ -27,42 +27,50 @@ purchase. Nothing else here takes more than ten minutes.
 
 ## 2. Buy the number
 
-A **mobile** number, not a geographic one. Geographic numbers in Spain often
-can't receive SMS at all, and the device layer needs both channels.
+A **geographic** number for your own province — Bercianos has a León one. Don't
+pay extra for a mobile number hoping to get SMS: no +34 number of any kind can
+receive a text from a device like this, because inbound A2P messages in Spain
+route over short codes that take months to provision and are priced for
+enterprises. Voice is the whole of this layer.
 
-Check before buying that the number is enabled for **Voice *and* SMS**. A
-voice-only number still works — a missed call is the primary trigger — but you
-lose the position pin and the low-battery warning.
+Then **enable the free cloud PBX and route the number to it.** This matters more
+than it sounds: the PBX is the part that notifies your server. A number pointed
+straight at a SIP line or a call-forward rings perfectly well and tells the
+village nothing.
 
-## 3. Point the two webhooks at your server
+## 3. Point the webhook at your server
 
-In the Twilio console, on the number itself:
+Deploy the server first. Saving the URL makes Zadarma call it immediately with a
+one-off handshake, and it won't accept a URL that doesn't answer.
 
-| Setting | Value | Method |
-|---|---|---|
-| **A call comes in** | `https://<your-app>/bridge/voice` | HTTP POST |
-| **A message comes in** | `https://<your-app>/bridge/sms` | HTTP POST |
+| Setting | Value |
+|---|---|
+| Notification URL | `https://<your-app>/bridge/voice` |
+| Notification types | **`notify_start`** — the only one that matters |
 
-## 4. Set two environment variables
+Both are in the account's integrations settings, or over the API
+(`/v1/pbx/callinfo/url/` and `/v1/pbx/callinfo/notifications/`).
+
+`notify_start` fires at *ring*, which is the entire reason this layer is built on
+it. Wait for the answer event instead and you lose every caller who hangs up
+after two rings.
+
+## 4. Set the environment variables
 
 ```bash
-# What Twilio signs its webhooks with. Found in the Twilio console.
-ESCUDO_TWILIO_AUTH_TOKEN="…"
+# The Zadarma account secret, from Settings → API. This signs the webhook.
+ESCUDO_ZADARMA_API_SECRET="…"
 
-# Where this server is reachable, exactly as typed into Twilio above.
-ESCUDO_PUBLIC_URL="https://<your-app>"
+# Optional: an audio file uploaded in the PBX voice menu, played to the caller.
+# Its id is a hex string, not a number. Leave it unset and the PBX's own
+# greeting runs instead.
+ESCUDO_ZADARMA_IVR_PLAY_ID="a6842305f1996e34"
 ```
 
-**Without the auth token the two routes are not mounted at all.** That is
-deliberate: there is no unauthenticated mode, because an open bridge is a phone
-number anyone who finds it can use to wake the village at three in the morning.
-The Telegram layer carries on working either way.
-
-**The URLs must match character for character.** Twilio computes its signature
-over the URL as configured, so a trailing slash, or a `www.` on one side and not
-the other, makes every genuine call fail the check and raise nothing. This is
-the single most common way to end up with a bridge that looks configured and
-does nothing.
+**Without the secret the bridge is not mounted at all.** That is deliberate:
+there is no unauthenticated mode, because an open bridge is a phone number
+anyone who finds it can use to wake the village at three in the morning. The
+Telegram layer carries on working either way.
 
 ## 5. Put the number in the device
 
@@ -70,8 +78,8 @@ Whatever the family bought, the setup is the same shape:
 
 1. **The Escudo number goes first** in the device's list of stored numbers.
 2. **Two or three neighbours after it**, family last. The device rings these in
-   order after texting Escudo, and whoever answers talks to the person over the
-   hands-free speaker. That call is the acknowledgment.
+   order after the Escudo number, and whoever answers talks to the person over
+   the hands-free speaker. That call is the acknowledgment.
 3. **A prepaid Spanish SIM**, topped up. Note whose it is and when — Spanish
    prepago dies after four to nine months without a recharge, silently.
 
@@ -112,13 +120,14 @@ and flags it after sixty days without either.
 
 | | |
 |---|---|
-| The number | ~$1.15 / month |
-| An inbound SMS | ~$0.0075 |
-| An alarm call | **nothing** — it is rejected before it connects |
+| The number | €1.70 / month, billed yearly |
+| The cloud PBX, and ten simultaneous lines | free |
+| An alarm call, to the village | **nothing** |
+| An alarm call, to the caller | free on any contract with bundled landline minutes; a few cents on prepaid, once the message is answered |
 | The server | Free tier on Deno Deploy |
 
-About a euro a month for the village, and nothing per alarm. The devices
-themselves are [bought by families]({{< relref "choosing-one" >}}).
+About €20 a year for the village, and nothing per alarm. The devices themselves
+are [bought by families]({{< relref "choosing-one" >}}).
 
 ## Details that cause trouble
 
@@ -128,24 +137,30 @@ anyone who guessed the number could alarm the village — but it means a device
 that was fitted and never registered *looks* installed and does nothing. That is
 what the inbox exists to surface.
 
-**A low-battery text does not wake the village.** Several devices send one, and
-under the ordinary rule that would be a siren at 3am. Those go to the
-coordinator. Anything the server doesn't recognise still raises the alarm.
+**A silent group is almost always an unregistered number.** Before suspecting the
+webhook, check the panel inbox — that is where an unknown caller lands, by
+design.
 
-**A call and a text from the same device are one alert, not two.** They arrive a
-second or two apart; the server folds the second into the first, and uses the
-text only to add a map pin.
+**Repeat calls from the same device are one alert, not several.** A pendant that
+dials its list in sequence, or a frightened caller who redials, produces one
+incident rather than a burst.
 
-**Ringing the number from your own phone won't do anything** unless your phone is
-registered. Test from the device, not from the coordinator's mobile.
+**Ringing the number from your own phone won't raise anything** unless your phone
+is registered. Test from the device, or register the coordinator's mobile first.
 
 **Check the number can be dialled from the device's SIM.** Some teleasistencia
 SIMs sold with a subscription are locked to a whitelist of numbers.
+
+**Everything above is downstream of two settings you can't test from the server:**
+that the number is routed to the PBX, and that `notify_start` is on. A bridge
+that passes every other check still stays silent without them.
 
 ## The code
 
 MIT licensed:
 [github.com/jpincas/escudo](https://github.com/jpincas/escudo), under
-`tech-implementation/bot`. The bridge is `src/bridge/twilio.ts` — about two
-hundred lines, with the signature check, the registered-number lookup and the
-one low-battery exception all in one file.
+`tech-implementation/bot`. The bridge is `src/bridge/zadarma.ts` — about two
+hundred lines, with the signature check and the answer; the registered-number
+lookup and the one low-battery exception are shared with any other provider in
+`src/bridge/inbound.ts`. `DEPLOY.md` records the traps, including the signature
+encoding, which is not what the provider's own documentation implies.

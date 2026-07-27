@@ -39,7 +39,7 @@ which this project refuses to keep anyway.
 What Escudo publishes instead is one requirement, and anything that meets it can
 join:
 
-> **It must be able to call or send an SMS to a stored number.**
+> **It must be able to call a stored number.**
 
 That's the whole specification. Every domestic alarm product sold in Spain meets
 it, in every shape, and so does a fifteen-year-old Nokia.
