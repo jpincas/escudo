@@ -53,6 +53,43 @@ deno task deploy
 deno task set-webhook https://escudo-bot.<org>.deno.net
 ```
 
+## Custom hostname: `<village>.escudo.red`
+
+The app already answers identically on whatever hostname reaches it — nothing in the code branches
+on host, and there is no canonical-host redirect. A custom domain changes only which address points
+at the app; Deno Deploy does the routing, the code doesn't know or care. Assigning one never takes
+the `.deno.net` address out of service — it keeps working, as a fallback, for as long as the app
+exists.
+
+Once, for the whole Red Escudo, at the **organisation** level (Deno console → org → Domains):
+
+1. Register the wildcard `*.escudo.red`, verified by DNS at the registrar. TLS is provisioned
+   automatically by Let's Encrypt (~90s, auto-renewing).
+
+Per village, once its app exists and has been deployed and verified (`deno task deploy`):
+
+2. **Assign `<village>.escudo.red`** to that app. This is the same org-level Domains tab as step 1
+   (console → org → Domains) — a wildcard can be assigned _partially_, so this is where a specific
+   subdomain off `*.escudo.red` gets pointed at a specific app. There is no per-app Domains setting
+   and no CLI/API path for this; the org-level console page is the only documented one.
+3. **Set the public URL:**
+   ```bash
+   deno deploy env add ESCUDO_PUBLIC_URL "https://<village>.escudo.red" --org=<org> --app=<app>
+   deno task deploy
+   ```
+4. **Re-point the Telegram webhook — do not skip this.** Telegram keeps POSTing updates to whichever
+   URL it was last told; changing `ESCUDO_PUBLIC_URL` does not move it. Until you run:
+   ```bash
+   deno task set-webhook https://<village>.escudo.red
+   ```
+   the group's alerts keep arriving at the old host — harmless while that host is still live, and a
+   dead alert path the moment it isn't. See gotchas.md ("Telegram").
+5. **Check whether the telephony notification URL needs changing.** It's configured on the
+   supplier's side (for Zadarma: console → Integrations, or see "The bridge" below) and does not
+   have to match `ESCUDO_PUBLIC_URL` — don't touch it casually. If you do change it, a real call
+   afterwards is the only proof the path still works; `deno task test-call` cannot substitute for
+   one. See gotchas.md ("The call bridge (Zadarma)").
+
 ## The bridge (Zadarma)
 
 **Deploy the app first.** Saving the notification URL makes Zadarma call it immediately with

@@ -78,6 +78,12 @@ relevant heading.
 - **`sendLocation` takes no caption.** The label goes in a separate message threaded under the
   alert, with the pin beneath it.
 
+- **The webhook doesn't follow a URL change.** Telegram POSTs updates to whatever URL it was last
+  told with `setWebhook`; changing `ESCUDO_PUBLIC_URL` (e.g. moving a village onto its own hostname,
+  see DEPLOY.md) does not repoint it. Updates keep arriving at the old host — fine while that host
+  is still live, a dead alert path the silent moment it isn't. Always follow a public-URL change
+  with `deno task set-webhook <new-url>`.
+
 ## Storage
 
 - **Two backends, one interface.** A change to `KvStore` that isn't mirrored in `MemoryStore` passes
