@@ -21,6 +21,7 @@ export const es: Strings = {
     header: "🚨 {emoji} {category}",
     quietHeader: "{emoji} {category}",
     from: "De: {who} · {time}",
+    fromDevice: "{kind} {who} · {time}",
     at: "📍 {address}",
     respond: "Responde en el grupo si puedes acudir.",
     quietRespond: "No es una emergencia. Responde cuando alguien pueda.",

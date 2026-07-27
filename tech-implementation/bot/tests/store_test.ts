@@ -7,7 +7,7 @@
 import { assertEquals } from "@std/assert";
 import { KvStore } from "../src/store/kv.ts";
 import { MemoryStore } from "../src/store/memory.ts";
-import type { Device, Incident, Store } from "../src/store/types.ts";
+import { type Device, type Incident, normaliseKind, type Store } from "../src/store/types.ts";
 
 const backends: Array<[string, () => Promise<Store>]> = [
   ["MemoryStore", async () => new MemoryStore()],
@@ -22,6 +22,8 @@ function incident(overrides: Partial<Incident> = {}): Incident {
     reporterRef: "42",
     reporterName: "María G.",
     reporterAddress: null,
+    reporterKind: null,
+    simulatedBy: null,
     groupMessageId: null,
     lat: null,
     lon: null,
@@ -270,3 +272,13 @@ for (const [name, open] of backends) {
     }
   });
 }
+
+Deno.test("a device stored under the old kinds comes back as wearable", () => {
+  // Registries in the field predate the July 2026 merge of pendant and watch.
+  assertEquals(normaliseKind("pendant"), "wearable");
+  assertEquals(normaliseKind("watch"), "wearable");
+  assertEquals(normaliseKind("alarm"), "alarm");
+  // Anything unrecognised degrades to a valid kind rather than failing the
+  // next panel edit on a record whose job is to raise alarms.
+  assertEquals(normaliseKind("teleporter"), "other");
+});

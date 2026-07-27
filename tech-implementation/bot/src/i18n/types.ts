@@ -21,6 +21,7 @@ export interface Strings {
     header: string;
     /** Headline for a quiet category — no siren, sentence case. {emoji} {category} */
     quietHeader: string;
+    fromDevice: string;
     /** Closing line on a quiet request, in place of `respond`. */
     quietRespond: string;
     /** Attribution line. {who} {time} */

@@ -9,7 +9,7 @@ export interface Me {
   locale: "es" | "en";
 }
 
-export type DeviceKind = "base" | "pendant" | "watch" | "phone" | "other";
+export type DeviceKind = "base" | "wearable" | "phone" | "alarm" | "other";
 
 export type DeviceStatus = "ok" | "overdue" | "never";
 

@@ -3,33 +3,7 @@
 import { type Api, InlineKeyboard } from "grammy";
 import type { Config } from "../config.ts";
 import type { Notifier } from "../alerts.ts";
-import type { AdminChannel } from "../bridge/twilio.ts";
 import { strings } from "../i18n/mod.ts";
-
-/**
- * The coordinator's private chat, as the bridge's AdminChannel.
- *
- * Everything the bridge can't send to the village comes here: an unregistered
- * number, a low battery, a failure. Silent by design — none of it is an
- * emergency, and a bridge that pings someone's phone at 3am for a flat pendant
- * battery is a bridge whose notifications get turned off.
- *
- * With no admin chat configured this logs and moves on rather than throwing:
- * losing a maintenance notice is a nuisance, but letting it break the handler
- * that also raises alarms is not acceptable.
- */
-export class TelegramAdminChannel implements AdminChannel {
-  constructor(private api: Api, private config: Config) {}
-
-  async notify(text: string): Promise<void> {
-    const chatId = this.config.telegram.adminChatId;
-    if (chatId === null) {
-      console.warn(`No admin chat configured; dropping bridge notice: ${text}`);
-      return;
-    }
-    await this.api.sendMessage(chatId, text, { disable_notification: true });
-  }
-}
 
 export class TelegramNotifier implements Notifier {
   constructor(private api: Api, private config: Config) {}

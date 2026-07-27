@@ -48,10 +48,10 @@ export const strings = {
       never: "Nunca probado",
     } satisfies Record<DeviceStatus, string>,
     kind: {
-      base: "Base",
-      pendant: "Colgante",
-      watch: "Reloj",
+      base: "Base con colgante",
+      wearable: "Colgante o reloj",
       phone: "Teléfono",
+      alarm: "Alarma de vivienda",
       other: "Otro",
     } satisfies Record<DeviceKind, string>,
     edit: "Editar",
@@ -81,6 +81,23 @@ export const strings = {
     confirm: "Eliminar dispositivo",
     cancel: "Cancelar",
     deleting: "Eliminando…",
+  },
+
+  testAlert: {
+    // "%label%" — see fmt() below.
+    action: "Probar",
+    heading: "Lanzar una alerta de prueba",
+    intro: 'Así se vería la alerta de "%label%" en el grupo:',
+    loading: "Preparando la vista previa…",
+    warning: "El grupo recibirá esta alerta como una alerta real. Los vecinos " +
+      "no sabrán que es una prueba, y pueden ponerse en camino. Avisa antes.",
+    category: "Categoría",
+    confirm: "Enviar al grupo",
+    sending: "Enviando…",
+    cancel: "Cancelar",
+    sent: "Alerta enviada. Cancélala en el grupo cuando termines.",
+    duplicate: "Ya había una alerta abierta de este dispositivo, así que no se " +
+      "ha enviado otra.",
   },
 } as const;
 

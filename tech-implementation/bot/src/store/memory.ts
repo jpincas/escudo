@@ -10,6 +10,7 @@ import {
   type InboxEntry,
   type Incident,
   type Member,
+  migrateDevice,
   type PanelLink,
   type PanelSession,
   type Store,
@@ -78,13 +79,13 @@ export class MemoryStore implements Store {
 
   async getDevice(msisdn: string): Promise<Device | null> {
     const device = this.devices.get(msisdn);
-    return device ? { ...device } : null;
+    return device ? migrateDevice({ ...device }) : null;
   }
 
   async listDevices(): Promise<Device[]> {
     return [...this.devices.values()]
       .sort((a, b) => a.label.localeCompare(b.label))
-      .map((d) => ({ ...d }));
+      .map((d) => migrateDevice({ ...d }));
   }
 
   async deleteDevice(msisdn: string): Promise<void> {

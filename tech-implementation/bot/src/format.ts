@@ -6,7 +6,7 @@
 // legible message under stress, the fragile escaper is the wrong trade.
 
 import type { Category, Config } from "./config.ts";
-import type { Incident } from "./store/types.ts";
+import type { DeviceKind, Incident } from "./store/types.ts";
 import { strings, t } from "./i18n/mod.ts";
 
 export function escapeHtml(text: string): string {
@@ -42,6 +42,25 @@ export function formatTime(config: Config, isoTimestamp: string): string {
 }
 
 /**
+ * One icon per kind of thing that can raise the alarm.
+ *
+ * Not decoration. These are read on a lock screen, at night, by someone
+ * deciding whether to put their boots on, so they are chosen to be
+ * distinguishable at that size rather than to be literal — 🛎️ is a bell that
+ * somebody rang, not a picture of a base station.
+ *
+ * 🚨 is deliberately absent: that belongs to the category header, and a second
+ * siren in the same message weakens the first.
+ */
+const KIND_EMOJI: Record<DeviceKind, string> = {
+  base: "🛎️",
+  wearable: "⌚",
+  phone: "📱",
+  alarm: "🏠",
+  other: "📟",
+};
+
+/**
  * The alert as it appears in the village group. Cancelled alerts keep their
  * original text, struck through, with a plain "cancelled" line underneath —
  * deleting them would erase the record, and shouting about the false alarm
@@ -60,10 +79,21 @@ export function formatAlert(config: Config, incident: Incident): string {
       emoji,
       category: escapeHtml(label.toLocaleUpperCase(config.village.locale)),
     });
-  const from = t(s.alert.from, {
-    who: escapeHtml(incident.reporterName),
-    time: formatTime(config, incident.createdAt),
-  });
+  // A device alert leads with what raised it. Every bridge alert carries the
+  // same category — a button cannot say whether it is a fall or a fire — so the
+  // kind is the only thing distinguishing them, and a responder half asleep
+  // needs to know at a glance whether a neighbour pressed something or a house
+  // went off on its own.
+  const from = incident.reporterKind
+    ? t(s.alert.fromDevice, {
+      kind: KIND_EMOJI[incident.reporterKind],
+      who: escapeHtml(incident.reporterName),
+      time: formatTime(config, incident.createdAt),
+    })
+    : t(s.alert.from, {
+      who: escapeHtml(incident.reporterName),
+      time: formatTime(config, incident.createdAt),
+    });
 
   // For a device alert the address is not a detail, it is the payload: a wall
   // unit carries no GPS, so this line is the only thing telling a responder

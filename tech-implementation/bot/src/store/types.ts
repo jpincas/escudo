@@ -37,6 +37,19 @@ export interface Incident {
    * where the reporter can share a live pin instead.
    */
   reporterAddress: string | null;
+  /**
+   * What kind of thing raised it, snapshotted like the address and for the same
+   * reason: editing the registry afterwards must not rewrite what an alert said
+   * at the time. Null for Telegram alerts — a person, not a device.
+   */
+  reporterKind: DeviceKind | null;
+  /**
+   * Set when an admin raised this from the panel rather than a device raising
+   * it (§5.2). The group sees an ordinary alert — that is the point of the
+   * exercise — so this is the only record that it was a drill, and the incident
+   * log would otherwise be a lie about what happened in the village.
+   */
+  simulatedBy: string | null;
   /** Message id of the alert post in the village group, for later edits. */
   groupMessageId: number | null;
   lat: number | null;
@@ -56,15 +69,47 @@ export interface Member {
 }
 
 /**
- * What shape of thing is registered. Only the coordinator cares — it tells them
- * what they are testing and where it lives. Nothing on the alert path branches
- * on it: every kind raises exactly the same alarm.
+ * What shape of thing is registered.
+ *
+ * Every kind raises exactly the same alarm — nothing on the alert path branches
+ * on it, and nothing here changes urgency, routing, or who is notified. It
+ * changes one thing: the icon on the alert, so a responder reading their phone
+ * in the dark knows whether a neighbour pressed a button or a house went off.
  *
  * `phone` is an ordinary phone belonging to a neighbour — a dumbphone, or a
  * smartphone whose owner doesn't use Telegram. It costs nothing and needs no
  * hardware, so it is the door most people come through.
+ *
+ * `alarm` is a domestic alarm panel wired to dial the bridge. It is the only
+ * kind where nobody chose to raise the alarm, and quite possibly the most
+ * useful thing this system does.
+ *
+ * `pendant` and `watch` were separate kinds until July 2026 and are folded into
+ * `wearable` on read — see normaliseKind().
  */
-export type DeviceKind = "base" | "pendant" | "watch" | "phone" | "other";
+export type DeviceKind = "base" | "wearable" | "phone" | "alarm" | "other";
+
+/**
+ * Map a stored kind onto the current set.
+ *
+ * Registries in the field predate the July 2026 merge, and a device that came
+ * back as an unknown kind would fail validation on the next panel edit — for a
+ * cosmetic field, on a record whose job is to raise alarms.
+ */
+export function normaliseKind(kind: string): DeviceKind {
+  if (kind === "pendant" || kind === "watch") return "wearable";
+  const known: DeviceKind[] = ["base", "wearable", "phone", "alarm", "other"];
+  return known.includes(kind as DeviceKind) ? kind as DeviceKind : "other";
+}
+
+/**
+ * Applied on the way out of every store, not in a one-off migration script: a
+ * village's registry is small and read constantly, and a rewrite that half-ran
+ * is a worse thing to own than a mapping that costs nothing.
+ */
+export function migrateDevice(device: Device): Device {
+  return { ...device, kind: normaliseKind(device.kind) };
+}
 
 /**
  * A registered way of raising the alarm that isn't Telegram.

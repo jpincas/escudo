@@ -100,3 +100,27 @@ export async function updateDevice(msisdn: string, body: DeviceEdit): Promise<De
 export async function deleteDevice(msisdn: string): Promise<void> {
   await request<void>(`/api/devices/${encodeURIComponent(msisdn)}`, { method: "DELETE" });
 }
+
+/** Render the alert this device would produce, without sending anything. */
+export async function previewAlert(msisdn: string, category?: string): Promise<string> {
+  const res = await request<{ preview: string }>(
+    `/api/devices/${encodeURIComponent(msisdn)}/simulate`,
+    { method: "POST", body: JSON.stringify({ preview: true, category }) },
+  );
+  return res.preview;
+}
+
+/**
+ * Raise a real alert as this device. The village group receives an ordinary
+ * alert — indistinguishable from a genuine one, which is the entire point of
+ * testing with it.
+ */
+export async function sendTestAlert(
+  msisdn: string,
+  category?: string,
+): Promise<{ status: "raised" | "duplicate" }> {
+  return request<{ status: "raised" | "duplicate" }>(
+    `/api/devices/${encodeURIComponent(msisdn)}/simulate`,
+    { method: "POST", body: JSON.stringify({ category }) },
+  );
+}

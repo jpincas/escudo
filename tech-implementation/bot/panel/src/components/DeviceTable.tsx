@@ -8,9 +8,10 @@ interface DeviceTableProps {
   devices: Device[];
   onEdit: (device: Device) => void;
   onDelete: (device: Device) => void;
+  onTest: (device: Device) => void;
 }
 
-export function DeviceTable({ devices, onEdit, onDelete }: DeviceTableProps) {
+export function DeviceTable({ devices, onEdit, onDelete, onTest }: DeviceTableProps) {
   // Sorted by label, not registration order — that's how a coordinator
   // scanning a printed or on-screen list finds a household, by name.
   const sorted = useMemo(
@@ -49,6 +50,9 @@ export function DeviceTable({ devices, onEdit, onDelete }: DeviceTableProps) {
                 : strings.devices.status.never}
             </td>
             <td className="device-table__actions">
+              <button type="button" onClick={() => onTest(device)}>
+                {strings.testAlert.action}
+              </button>
               <button type="button" onClick={() => onEdit(device)}>
                 {strings.devices.edit}
               </button>

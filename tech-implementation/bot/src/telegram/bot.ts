@@ -1,5 +1,5 @@
 // Assembles the bot: one place where config, storage, the alert core and the
-// Telegram handlers meet. Both entrypoints (dev.ts polling, main.ts webhook)
+// Telegram handlers meet. main.ts wires them to polling or a webhook
 // use this same function — the only difference between them is how updates
 // arrive.
 //

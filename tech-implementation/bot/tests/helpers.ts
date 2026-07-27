@@ -9,7 +9,7 @@ import type { Config } from "../src/config.ts";
 export function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     village: { name: "Ejemplo del Camino", locale: "es", timezone: "Europe/Madrid" },
-    telegram: { groupChatId: -1001234567890, adminChatId: null },
+    telegram: { groupChatId: -1001234567890 },
     categories: [
       { id: "fuego", emoji: "🔥" },
       { id: "medico", emoji: "🚑" },
@@ -24,8 +24,10 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
       botToken: "test-token",
       webhookSecret: "test-secret",
       twilioAuthToken: undefined,
+      zadarmaApiSecret: undefined,
+      zadarmaIvrPlayId: undefined,
     },
-    runtime: { kvPath: undefined, port: 8000, publicUrl: undefined },
+    runtime: { kvPath: undefined, port: 8000, publicUrl: undefined, telegramMode: "polling" },
     ...overrides,
   };
 }

@@ -13,6 +13,9 @@ import { z } from "zod";
 import type { Config } from "../config.ts";
 import type { Device, DeviceKind, PanelSession, Store } from "../store/types.ts";
 import { clearedCookie, exchangeLink, sessionCookie, tokenFromCookies } from "./auth.ts";
+import type { AlertService } from "../alerts.ts";
+import { DEFAULT_CATEGORY } from "../bridge/inbound.ts";
+import { formatAlert } from "../format.ts";
 import { MSISDN, normaliseMsisdn } from "../msisdn.ts";
 
 /**
@@ -30,6 +33,7 @@ const MESSAGES = {
     duplicate: "Ese número ya está registrado.",
     notFound: "No existe ningún dispositivo con ese número.",
     invalid: "Faltan datos o no son válidos.",
+    simulateUnavailable: "Las alertas de prueba no están disponibles en esta instalación.",
   },
   en: {
     unauthorized: "Session expired. Ask the bot for a new link with /panel.",
@@ -38,10 +42,16 @@ const MESSAGES = {
     duplicate: "That number is already registered.",
     notFound: "No device is registered with that number.",
     invalid: "Something is missing or invalid.",
+    simulateUnavailable: "Test alerts are not available in this deployment.",
   },
 } as const;
 
-const KINDS = ["base", "pendant", "watch", "phone", "other"] as const;
+const KINDS = ["base", "wearable", "phone", "alarm", "other"] as const;
+
+const simulateSchema = z.object({
+  category: z.string().optional(),
+  preview: z.boolean().optional(),
+});
 
 const CreateDevice = z.object({
   msisdn: z.string().trim(),
@@ -84,7 +94,21 @@ export function deviceStatus(
 /** The session the auth middleware puts on every request below it. */
 type PanelEnv = { Variables: { session: PanelSession } };
 
-export function createPanelApi(config: Config, store: Store): Hono<PanelEnv> {
+/**
+ * What the panel needs beyond storage in order to raise a real alarm.
+ *
+ * Optional because nothing else in the panel needs it: unwired, the simulate
+ * route answers 503 rather than the panel failing to start.
+ */
+export interface PanelDeps {
+  alerts?: AlertService;
+}
+
+export function createPanelApi(
+  config: Config,
+  store: Store,
+  deps?: PanelDeps,
+): Hono<PanelEnv> {
   const api = new Hono<PanelEnv>();
   const m = MESSAGES[config.village.locale];
 
@@ -194,6 +218,78 @@ export function createPanelApi(config: Config, store: Store): Hono<PanelEnv> {
     if (!await store.getDevice(msisdn)) return c.json({ error: m.notFound }, 404);
     await store.deleteDevice(msisdn);
     return c.body(null, 204);
+  });
+
+  // ── Raising an alert as a device ──
+  //
+  // What a coordinator needs before a village depends on this: to see the exact
+  // message a given household produces, and to watch it arrive on real phones.
+  // Guessing from the code is not the same thing, and the first time anyone sees
+  // this message should not be the night it matters.
+  //
+  // Two modes, and the default is the harmless one. `preview` renders the alert
+  // and returns it, touching nothing. Without it the alert is real: it posts to
+  // the village group, logs an incident, and can be cancelled the ordinary way —
+  // which is the only way to test that path too.
+  api.post("/devices/:msisdn/simulate", async (c) => {
+    if (!deps?.alerts) return c.json({ error: m.simulateUnavailable }, 503);
+
+    const msisdn = normaliseMsisdn(c.req.param("msisdn"));
+    const device = await store.getDevice(msisdn);
+    if (!device) return c.json({ error: m.notFound }, 404);
+
+    const parsed = simulateSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    const category = parsed.data.category ?? DEFAULT_CATEGORY;
+    if (!config.categories.some((x) => x.id === category)) {
+      return c.json({ error: m.invalid }, 400);
+    }
+
+    // Rendered from a throwaway incident that is never stored. Same function
+    // the group message goes through, so what is shown is what would be sent.
+    if (parsed.data.preview) {
+      return c.json({
+        preview: formatAlert(config, {
+          id: "preview",
+          source: "device",
+          category,
+          reporterRef: device.msisdn,
+          reporterName: device.label,
+          reporterAddress: device.address,
+          reporterKind: device.kind,
+          simulatedBy: c.get("session").name,
+          groupMessageId: null,
+          lat: null,
+          lon: null,
+          createdAt: new Date().toISOString(),
+          cancelledAt: null,
+          cancelledBy: null,
+        }),
+      });
+    }
+
+    const session = c.get("session");
+    const result = await deps.alerts.raiseAlert({
+      source: "device",
+      category,
+      reporterRef: device.msisdn,
+      reporterName: device.label,
+      reporterAddress: device.address,
+      reporterKind: device.kind,
+      simulatedBy: session.name,
+    });
+
+    // The group is not told this was a drill — an alert that announces itself as
+    // practice tests nothing about how people react to a real one. What happened
+    // is not lost, though: the incident is logged with `simulatedBy`, so the
+    // panel's own record shows who ran the drill and when. Cancel it the ordinary
+    // way when the test is done.
+    //
+    // A repeat press inside the dedupe window is reported honestly rather than as
+    // a second success: the operator pressed a button and nothing new reached the
+    // group, and they need to know which of those happened.
+    return c.json({ status: result.status, incident: result.incident });
   });
 
   return api;

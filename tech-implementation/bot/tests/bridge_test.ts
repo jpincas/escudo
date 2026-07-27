@@ -11,7 +11,6 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { AlertService } from "../src/alerts.ts";
 import {
-  type AdminChannel,
   createBridge,
   isLowBattery,
   parseLocation,
@@ -25,13 +24,6 @@ import { FakeNotifier, makeConfig } from "./helpers.ts";
 
 const AUTH_TOKEN = "twilio-auth-token";
 const PUBLIC_URL = "https://escudo.example";
-
-class FakeAdmin implements AdminChannel {
-  sent: string[] = [];
-  async notify(text: string): Promise<void> {
-    this.sent.push(text);
-  }
-}
 
 function device(overrides: Partial<Device> = {}): Device {
   return {
@@ -67,17 +59,15 @@ function setup(now = new Date("2026-07-21T09:00:00.000Z")) {
   const config = makeConfig();
   const store: Store = new MemoryStore();
   const notifier = new FakeNotifier();
-  const admin = new FakeAdmin();
   const handle = createBridge({
     config,
     store,
     alerts: new AlertService(config, store, notifier, () => now),
-    admin,
     authToken: AUTH_TOKEN,
     publicUrl: PUBLIC_URL,
     now: () => now,
   });
-  return { store, notifier, admin, handle, now };
+  return { store, notifier, handle, now };
 }
 
 /** POST a Twilio webhook, correctly signed unless told otherwise. */
@@ -168,33 +158,35 @@ Deno.test("a device's call and SMS become one incident, with a pin", async () =>
   assertEquals(notifier.locations[0].lon, -5.1174);
 });
 
-Deno.test("an unregistered number reaches the coordinator, never the group", async () => {
-  const { handle, store, notifier, admin } = setup();
+Deno.test("an unregistered number lands in the panel inbox, never the group", async () => {
+  const { handle, store, notifier } = setup();
 
   const res = await post(handle, SMS_PATH, { From: "+34600999888", Body: "test alarm" });
   assertEquals(res?.status, 200);
 
   // Alarming the village would make the number spammable by anyone who guesses
-  // it; silence would hide an install that was never finished.
+  // it; silence would hide an install that was never finished. So it reaches
+  // neither the group nor any other message — only the panel inbox, where a
+  // household is named and registered.
   assertEquals(notifier.posted.length, 0);
-  assertEquals(admin.sent.length, 1);
-  assertStringIncludes(admin.sent[0], "+34600999888");
 
   const inbox = await store.listInbox();
   assertEquals(inbox.length, 1);
+  assertEquals(inbox[0].msisdn, "+34600999888");
   assertEquals(inbox[0].lastBody, "test alarm");
 });
 
-Deno.test("a low-battery SMS goes to the coordinator, not the village", async () => {
-  const { handle, store, notifier, admin, now } = setup();
+Deno.test("a low-battery SMS is not an alarm, but still proves the device", async () => {
+  const { handle, store, notifier, now } = setup();
   await store.putDevice(device());
 
   await post(handle, SMS_PATH, { From: "+34600111222", Body: "Bateria baja 15%" });
 
+  // The village is not woken for a flat battery — that is the whole reason the
+  // carve-out exists.
   assertEquals(notifier.posted.length, 0);
-  assertEquals(admin.sent.length, 1);
-  assertStringIncludes(admin.sent[0], "Casa de María");
-  // It still proves the device: that message travelled the whole path.
+  // But the message travelled the whole path, which is exactly what proof-of-life
+  // means: the device's lastProvenAt is stamped, and the panel shows it fresh.
   assertEquals((await store.getDevice("+34600111222"))?.lastProvenAt, now.toISOString());
 });
 

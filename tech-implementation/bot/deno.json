@@ -1,12 +1,12 @@
 {
   "version": "0.1.0",
   "tasks": {
-    "dev": "deno run --unstable-kv --allow-net --allow-read --allow-write --allow-env --env-file=.env.local --env-file=.env dev.ts",
+    "dev": "ESCUDO_TELEGRAM=off deno run --watch --unstable-kv --unstable-cron --allow-net --allow-read --allow-write --allow-env --env-file=.env.local --env-file=.env main.ts",
     "start": "deno run --unstable-kv --unstable-cron --allow-net --allow-read --allow-write --allow-env --env-file=.env.local --env-file=.env main.ts",
     "set-webhook": "deno run --allow-net --allow-read --allow-env --env-file=.env.local --env-file=.env scripts/set-webhook.ts",
     "test": "deno test --unstable-kv --allow-read --allow-write --allow-env tests/",
-    "iterate": "deno check main.ts dev.ts",
-    "check": "deno fmt --check && deno lint && deno check main.ts dev.ts && deno task test",
+    "iterate": "deno check main.ts",
+    "check": "deno fmt --check && deno lint && deno check main.ts && deno task test",
     "panel:install": "cd panel && deno install",
     "panel:dev": "cd panel && deno run -A npm:vite",
     "build": "deno task panel:install && cd panel && deno run -A npm:vite build"

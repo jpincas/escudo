@@ -31,6 +31,10 @@ export interface RaiseInput {
   reporterName: string;
   /** Street address of a registered device. Omitted for Telegram alerts. */
   reporterAddress?: string | null;
+  /** Device kind, for the icon on the alert. Absent for Telegram alerts. */
+  reporterKind?: import("./store/types.ts").DeviceKind | null;
+  /** Name of the admin who raised this from the panel, if anyone did. */
+  simulatedBy?: string | null;
 }
 
 export type RaiseResult =
@@ -89,6 +93,8 @@ export class AlertService {
       reporterRef: input.reporterRef,
       reporterName: input.reporterName,
       reporterAddress: input.reporterAddress ?? null,
+      reporterKind: input.reporterKind ?? null,
+      simulatedBy: input.simulatedBy ?? null,
       groupMessageId: null,
       lat: null,
       lon: null,

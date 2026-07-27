@@ -7,6 +7,16 @@ import { DeviceFormModal } from "./DeviceFormModal.tsx";
 import { DeviceTable } from "./DeviceTable.tsx";
 import { ErrorView } from "./ErrorView.tsx";
 import { LoadingView } from "./LoadingView.tsx";
+import { TestAlertModal } from "./TestAlertModal.tsx";
+
+/**
+ * Categories a test alert can be raised as.
+ *
+ * Hard-coded rather than fetched: the panel has no categories endpoint, and a
+ * device press always raises the generic one in real life anyway (tech-spec §2)
+ * — the others exist here so a coordinator can see how each renders.
+ */
+const CATEGORIES = ["emergencia", "fuego", "medico", "delito"];
 
 /** The panel's only screen: the roster of alert devices for this village. */
 export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
@@ -15,6 +25,7 @@ export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
   const [deleting, setDeleting] = useState<Device | null>(null);
+  const [testing, setTesting] = useState<Device | null>(null);
 
   return (
     <div className="devices-screen">
@@ -48,7 +59,12 @@ export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void
       )}
 
       {state.status === "loaded" && state.devices.length > 0 && (
-        <DeviceTable devices={state.devices} onEdit={setEditing} onDelete={setDeleting} />
+        <DeviceTable
+          devices={state.devices}
+          onEdit={setEditing}
+          onDelete={setDeleting}
+          onTest={setTesting}
+        />
       )}
 
       {showAdd && (
@@ -65,6 +81,14 @@ export function DevicesScreen({ me, onSignOut }: { me: Me; onSignOut: () => void
           device={editing}
           onSubmit={(body) => editDevice(editing.msisdn, body)}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {testing && (
+        <TestAlertModal
+          device={testing}
+          categories={CATEGORIES}
+          onClose={() => setTesting(null)}
         />
       )}
 

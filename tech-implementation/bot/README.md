@@ -63,10 +63,9 @@ alerts: { emergency_line, dedupe_seconds } # YOUR national numbers
 data: { retention_days }
 ```
 
-`config.yaml` is **committed** — it is village *policy*, none of it identifies a deployment, and
-Deno Deploy only ever sees uploaded source. Everything that wires up *your* deployment lives in
-the environment: `ESCUDO_BOT_TOKEN` (the one real secret) and `ESCUDO_GROUP_CHAT_ID` (plus
-optional `ESCUDO_ADMIN_CHAT_ID`).
+`config.yaml` is **committed** — it is village _policy_, none of it identifies a deployment, and
+Deno Deploy only ever sees uploaded source. Everything that wires up _your_ deployment lives in the
+environment: `ESCUDO_BOT_TOKEN` (the one real secret) and `ESCUDO_GROUP_CHAT_ID`.
 
 To add a language, copy `src/i18n/es.ts`, translate it, and register it in `src/i18n/mod.ts`.
 `Strings` is a type, so a half-finished translation fails `deno task check` rather than reaching a
@@ -75,7 +74,7 @@ village.
 ## How it's put together
 
 ```
-main.ts / dev.ts     webhook (production) / polling (local) — same bot
+main.ts             the app — webhooks with a public URL, polling without
 src/alerts.ts        THE CORE: raise, cancel, attach location, log
 src/format.ts        how an alert reads in the group
 src/config.ts        config.yaml + env, validated at boot

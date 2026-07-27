@@ -5,7 +5,7 @@
 //     Committed, because none of it identifies a deployment and Deno Deploy
 //     only ever sees uploaded source.
 //   • environment — everything that wires up *this* deployment: the bot token
-//     and the chat ids it talks to. Nothing instance-specific is committed.
+//     and the group chat id it talks to. Nothing instance-specific is committed.
 //
 // Adopting a new village means editing config.yaml and setting the env vars.
 // If anything is missing or malformed we throw at boot: a silently
@@ -69,7 +69,7 @@ export type VillageConfig = z.infer<typeof VillageConfigSchema>;
 
 export interface Config {
   village: { name: string; locale: Locale; timezone: string };
-  telegram: { groupChatId: number; adminChatId: number | null };
+  telegram: { groupChatId: number };
   categories: Category[];
   alerts: { emergencyLine: string; dedupeSeconds: number };
   data: { retentionDays: number };
@@ -85,6 +85,8 @@ export interface Config {
      * open bridge lets anyone who finds the URL raise the village.
      */
     twilioAuthToken: string | undefined;
+    zadarmaApiSecret: string | undefined;
+    zadarmaIvrPlayId: string | undefined;
   };
   runtime: {
     kvPath: string | undefined;
@@ -95,6 +97,16 @@ export interface Config {
      * link an admin can open; unset simply means no panel links.
      */
     publicUrl: string | undefined;
+    /**
+     * How Telegram reaches us, decided once at boot:
+     *
+     *   webhook — a public URL is set; Telegram POSTs to a secret path.
+     *   polling — no public URL; we dial out with getUpdates.
+     *   offline — ESCUDO_TELEGRAM=off; no bot, no network, no group. The alert
+     *             path's Notifier prints to the terminal so the panel can be
+     *             developed without touching the real village.
+     */
+    telegramMode: "webhook" | "polling" | "offline";
   };
 }
 
@@ -161,9 +173,22 @@ export async function loadConfig(): Promise<Config> {
   }
 
   const v = parseVillageConfig(yaml);
-  const botToken = required("ESCUDO_BOT_TOKEN");
-  const groupChatId = chatId("ESCUDO_GROUP_CHAT_ID", required("ESCUDO_GROUP_CHAT_ID"));
-  const rawAdminChatId = Deno.env.get("ESCUDO_ADMIN_CHAT_ID");
+
+  // Offline is the dev switch: the panel and bridge run, but nothing talks to
+  // Telegram. It follows that the bot token and group id — required to reach a
+  // real village — are not required here, so a fresh checkout with no secrets
+  // can still `deno task dev` and work on the UI.
+  const offline = Deno.env.get("ESCUDO_TELEGRAM") === "off";
+  const publicUrl = Deno.env.get("ESCUDO_PUBLIC_URL") || undefined;
+  const telegramMode = offline ? "offline" : publicUrl ? "webhook" : "polling";
+
+  const botToken = offline
+    ? (Deno.env.get("ESCUDO_BOT_TOKEN") ?? "")
+    : required("ESCUDO_BOT_TOKEN");
+  const rawGroupChatId = offline
+    ? Deno.env.get("ESCUDO_GROUP_CHAT_ID")
+    : required("ESCUDO_GROUP_CHAT_ID");
+  const groupChatId = rawGroupChatId ? chatId("ESCUDO_GROUP_CHAT_ID", rawGroupChatId) : 0;
 
   return {
     village: {
@@ -174,7 +199,6 @@ export async function loadConfig(): Promise<Config> {
     },
     telegram: {
       groupChatId,
-      adminChatId: rawAdminChatId ? chatId("ESCUDO_ADMIN_CHAT_ID", rawAdminChatId) : null,
     },
     categories: v.categories,
     alerts: {
@@ -189,11 +213,19 @@ export async function loadConfig(): Promise<Config> {
       // recommendation: the path is unguessable and already secret.
       webhookSecret: Deno.env.get("ESCUDO_WEBHOOK_SECRET") ?? botToken,
       twilioAuthToken: Deno.env.get("ESCUDO_TWILIO_AUTH_TOKEN") || undefined,
+      // Zadarma signs its call notifications with the account secret — the same
+      // value that signs API calls. Without it the bridge does not mount.
+      zadarmaApiSecret: Deno.env.get("ESCUDO_ZADARMA_API_SECRET") || undefined,
+      // Id of the recording played back to a caller, from Zadarma's PBX audio
+      // library. Unset means the call is answered and hung up in silence; the
+      // alarm is raised either way.
+      zadarmaIvrPlayId: Deno.env.get("ESCUDO_ZADARMA_IVR_PLAY_ID") || undefined,
     },
     runtime: {
       kvPath: Deno.env.get("ESCUDO_KV_PATH") || undefined,
       port: Number(Deno.env.get("ESCUDO_PORT") ?? 8000),
-      publicUrl: Deno.env.get("ESCUDO_PUBLIC_URL") || undefined,
+      publicUrl,
+      telegramMode,
     },
   };
 }

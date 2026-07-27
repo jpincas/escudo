@@ -29,6 +29,7 @@ import {
   type InboxEntry,
   type Incident,
   type Member,
+  migrateDevice,
   type PanelLink,
   type PanelSession,
   type Store,
@@ -142,13 +143,13 @@ export class KvStore implements Store {
 
   async getDevice(msisdn: string): Promise<Device | null> {
     const entry = await this.kv.get<Device>(deviceKey(msisdn));
-    return entry.value ?? null;
+    return entry.value ? migrateDevice(entry.value) : null;
   }
 
   async listDevices(): Promise<Device[]> {
     const devices: Device[] = [];
     for await (const entry of this.kv.list<Device>({ prefix: ["device"] })) {
-      devices.push(entry.value);
+      devices.push(migrateDevice(entry.value));
     }
     return devices.sort((a, b) => a.label.localeCompare(b.label));
   }

@@ -19,6 +19,8 @@ function incident(overrides: Partial<Incident> = {}): Incident {
     reporterRef: "42",
     reporterName: "María G.",
     reporterAddress: null,
+    reporterKind: null,
+    simulatedBy: null,
     groupMessageId: 1000,
     lat: null,
     lon: null,
@@ -141,4 +143,37 @@ Deno.test("a drill says what it is before it says anything else", () => {
   // Never mistakable for the real thing, and never carrying its numbers.
   assertEquals(text.includes("🚨"), false);
   assertEquals(text.includes(config.alerts.emergencyLine), false);
+});
+
+Deno.test("a device alert leads with the icon for its kind", () => {
+  const config = makeConfig();
+  const text = formatAlert(
+    config,
+    incident({ source: "device", reporterKind: "alarm", reporterName: "Casa de María" }),
+  );
+  assertStringIncludes(text, "🏠 Casa de María");
+  // The category siren stays where it belongs, and is not duplicated.
+  assertEquals(text.split("🚨").length - 1, 1);
+});
+
+Deno.test("each kind gets its own icon", () => {
+  const config = makeConfig();
+  const seen = new Set<string>();
+  for (const kind of ["base", "wearable", "phone", "alarm", "other"] as const) {
+    const text = formatAlert(config, incident({ source: "device", reporterKind: kind }));
+    const icon = text.split("\n")[1].split(" ")[0];
+    seen.add(icon);
+  }
+  // Five kinds, five distinct icons: an icon shared by two kinds tells a
+  // responder nothing.
+  assertEquals(seen.size, 5);
+});
+
+Deno.test("a Telegram alert keeps the plain attribution", () => {
+  const config = makeConfig();
+  const text = formatAlert(config, incident({ reporterKind: null, reporterName: "María G." }));
+  assertStringIncludes(text, "María G.");
+  for (const icon of ["🛎️", "⌚", "📱", "🏠", "📟"]) {
+    assertEquals(text.includes(icon), false);
+  }
 });
