@@ -36,11 +36,6 @@ export const en: Strings = {
       body: "What has actually happened in the village will be listed here: " +
         "every alert, who raised it and when. Not built yet.",
     },
-    config: {
-      heading: "Config",
-      body: "The village's public information will be editable here: name, " +
-        "photo, phone number and the responsible people. Not built yet.",
-    },
   },
 
   devices: {
@@ -115,5 +110,34 @@ export const en: Strings = {
     sent: "Alert sent. Cancel it in the group when you're done.",
     duplicate: "There was already an open alert from this device, so another " +
       "was not sent.",
+  },
+
+  config: {
+    heading: "Config",
+    intro: "This information appears on the village's public welcome page.",
+    phoneLabel: "Escudo phone number",
+    phoneHelp: "The number a neighbour calls to raise the alarm. " +
+      "International format, e.g. +34600111222. Leave blank if this village " +
+      "has no call bridge yet.",
+    photoLabel: "Photo (URL)",
+    photoHelp: "A link to an image hosted elsewhere. Must start with " +
+      "https://. There is no upload.",
+    introTextLabel: "Intro text",
+    introTextHelp: "A short paragraph introducing this village's Red Escudo.",
+    peopleHeading: "Responsible people",
+    peopleNotice: "These names are published on the village's public page, " +
+      "which search engines can index: anyone on the internet can see them, " +
+      "not only people with the link. Before adding someone, tell them their " +
+      "name and role will appear there.",
+    peopleEmpty: "No responsible people have been added yet.",
+    nameLabel: "Name",
+    roleLabel: "Role",
+    addPerson: "Add person",
+    removePerson: "Remove",
+    moveUp: "Move up",
+    moveDown: "Move down",
+    save: "Save",
+    saving: "Saving…",
+    saved: "Saved.",
   },
 };

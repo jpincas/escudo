@@ -35,11 +35,11 @@ export interface Strings {
     signOut: string;
   };
 
-  /** Section placeholders — replaced one screen at a time by §3, §6 and §7. */
+  /** Section placeholders — replaced one screen at a time by §3, §6 and §7.
+   *  Config no longer has one: its real screen is below. */
   placeholder: {
     inbox: { heading: string; body: string };
     history: { heading: string; body: string };
-    config: { heading: string; body: string };
   };
 
   devices: {
@@ -98,5 +98,38 @@ export interface Strings {
     cancel: string;
     sent: string;
     duplicate: string;
+  };
+
+  /**
+   * The Config screen (spec 2026-07-27 §3): the deployment's public profile,
+   * shown on the welcome page. Presentation only — no policy field (name,
+   * locale, categories, retention…) belongs here, and none is offered.
+   */
+  config: {
+    heading: string;
+    intro: string;
+    phoneLabel: string;
+    phoneHelp: string;
+    photoLabel: string;
+    photoHelp: string;
+    introTextLabel: string;
+    introTextHelp: string;
+    peopleHeading: string;
+    /** Shown plainly next to the list (spec 3.4): these names are personal
+     *  data published to the open web. */
+    peopleNotice: string;
+    peopleEmpty: string;
+    nameLabel: string;
+    roleLabel: string;
+    addPerson: string;
+    /** Accessible name for a row's remove button. */
+    removePerson: string;
+    /** Accessible name for a row's move-up button. */
+    moveUp: string;
+    /** Accessible name for a row's move-down button. */
+    moveDown: string;
+    save: string;
+    saving: string;
+    saved: string;
   };
 }

@@ -7,6 +7,7 @@
 import {
   type BridgeChannel,
   type Device,
+  emptyVillageProfile,
   type InboxEntry,
   type Incident,
   type Member,
@@ -14,6 +15,7 @@ import {
   type PanelLink,
   type PanelSession,
   type Store,
+  type VillageProfile,
 } from "./types.ts";
 
 export class MemoryStore implements Store {
@@ -21,6 +23,7 @@ export class MemoryStore implements Store {
   private members = new Map<string, Member>();
   private devices = new Map<string, Device>();
   private inbox = new Map<string, InboxEntry>();
+  private villageProfile: VillageProfile | null = null;
   private panelLinks = new Map<string, PanelLink>();
   private sessions = new Map<string, PanelSession>();
   private meta = new Map<string, string>();
@@ -129,6 +132,23 @@ export class MemoryStore implements Store {
       }
     }
     return deleted;
+  }
+
+  // ── Public profile — presentation only, see VillageProfile's own doc ──
+
+  async getVillageProfile(): Promise<VillageProfile> {
+    if (!this.villageProfile) return emptyVillageProfile();
+    return {
+      ...this.villageProfile,
+      responsiblePeople: this.villageProfile.responsiblePeople.map((p) => ({ ...p })),
+    };
+  }
+
+  async putVillageProfile(profile: VillageProfile): Promise<void> {
+    this.villageProfile = {
+      ...profile,
+      responsiblePeople: profile.responsiblePeople.map((p) => ({ ...p })),
+    };
   }
 
   async putPanelLink(link: PanelLink): Promise<void> {

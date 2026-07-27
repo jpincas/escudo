@@ -402,7 +402,8 @@ button.button--danger-text:hover:not(:disabled) {
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
   width: 100%;
   font-family: inherit;
   font-size: 14px;
@@ -413,8 +414,13 @@ button.button--danger-text:hover:not(:disabled) {
   color: var(--tinta);
 }
 
+.form-field textarea {
+  resize: vertical;
+}
+
 .form-field input:focus,
-.form-field select:focus {
+.form-field select:focus,
+.form-field textarea:focus {
   outline: 2px solid var(--ambar);
   outline-offset: 1px;
 }
@@ -471,6 +477,75 @@ button.button--danger-text:hover:not(:disabled) {
 
 .test-alert__result {
   margin: 0.5rem 0;
+  color: var(--verde);
+  font-weight: 600;
+}
+
+/* ── Config screen ─────────────────────────────────────────────────── */
+
+.config-form {
+  max-width: 640px;
+}
+
+.config-form__intro {
+  color: #55534c;
+  margin-bottom: 20px;
+}
+
+.config-people {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px 18px;
+  margin: 0 0 16px;
+}
+
+.config-people legend {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--verde);
+  padding: 0 4px;
+}
+
+.config-people__notice {
+  color: #55534c;
+  font-size: 13px;
+  background: #f1efe9;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.config-people__empty {
+  color: #77756c;
+  font-size: 13px;
+}
+
+.config-person-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.config-person-row__name,
+.config-person-row__role {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.config-person-row__actions {
+  display: flex;
+  gap: 4px;
+  padding-top: 24px;
+}
+
+.config-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.config-form__saved {
   color: var(--verde);
   font-weight: 600;
 }

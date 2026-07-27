@@ -169,6 +169,359 @@ Deno.test("a malformed phone number is refused with a usable message", async () 
   assertEquals(typeof (await res.json()).error, "string");
 });
 
+// ── Village profile (spec 2026-07-27 §3) ──
+
+Deno.test("the village profile route is refused without a session", async () => {
+  const { api } = setup();
+  assertEquals((await api.request(`${BASE}/village-profile`)).status, 401);
+  assertEquals(
+    (await api.request(`${BASE}/village-profile`, { method: "PUT" })).status,
+    401,
+  );
+});
+
+Deno.test("a brand-new deployment's profile reads as empty, not an error", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, { headers: { cookie } });
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
+    escudoPhone: null,
+    photoUrl: null,
+    introText: null,
+    responsiblePeople: [],
+  });
+});
+
+Deno.test("a full profile can be saved and read back, phone number normalised", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+  const json = { "content-type": "application/json", cookie };
+
+  const saved = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({
+      escudoPhone: "+34 600 111 222",
+      photoUrl: "https://example.org/photo.jpg",
+      introText: "Bienvenidos a la Red Escudo de este pueblo.",
+      responsiblePeople: [
+        { name: "María G.", role: "Coordinadora" },
+        { name: "Luis P.", role: "Suplente" },
+      ],
+    }),
+  });
+  assertEquals(saved.status, 200);
+  const body = await saved.json();
+  assertEquals(body.escudoPhone, "+34600111222");
+  assertEquals(body.responsiblePeople.length, 2);
+
+  const reread = await api.request(`${BASE}/village-profile`, { headers: { cookie } });
+  assertEquals((await reread.json()).responsiblePeople[0].name, "María G.");
+});
+
+Deno.test("every field is optional — an all-empty profile is accepted", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [],
+    }),
+  });
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
+    escudoPhone: null,
+    photoUrl: null,
+    introText: null,
+    responsiblePeople: [],
+  });
+});
+
+Deno.test("a malformed Escudo phone number is refused, naming the field, and nothing is stored", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "600111222", // missing the country code
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [],
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(typeof body.error, "string");
+  assertEquals(body.field, "escudoPhone");
+  assertEquals(await store.getVillageProfile(), {
+    escudoPhone: null,
+    photoUrl: null,
+    introText: null,
+    responsiblePeople: [],
+  });
+});
+
+Deno.test("a photo URL that is not https is refused, naming the field", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "http://example.org/photo.jpg",
+      introText: "",
+      responsiblePeople: [],
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.field, "photoUrl");
+});
+
+Deno.test("a responsible person with a blank role is refused, naming that person's field", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [{ name: "María G.", role: "   " }],
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.field, "responsiblePeople.0.role");
+  // Rejected — the stored record is untouched.
+  assertEquals((await store.getVillageProfile()).responsiblePeople, []);
+});
+
+// ── Length bounds (review finding F2) ──
+//
+// A record over Deno KV's 64 KiB value cap must be refused with a
+// field-named 400, not left to the write blow up as a bare 500.
+
+Deno.test("an intro text over the length limit is refused, naming the field", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "x".repeat(2001),
+      responsiblePeople: [],
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.field, "introText");
+  assertEquals((await store.getVillageProfile()).introText, null);
+});
+
+Deno.test("a photo URL over the length limit is refused, naming the field", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "https://example.org/" + "x".repeat(2000),
+      introText: "",
+      responsiblePeople: [],
+    }),
+  });
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).field, "photoUrl");
+  assertEquals((await store.getVillageProfile()).photoUrl, null);
+});
+
+Deno.test("a person's name or role over the length limit is refused, naming that field", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const badName = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [{ name: "x".repeat(201), role: "Coordinadora" }],
+    }),
+  });
+  assertEquals(badName.status, 400);
+  assertEquals((await badName.json()).field, "responsiblePeople.0.name");
+
+  const badRole = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [{ name: "María G.", role: "x".repeat(201) }],
+    }),
+  });
+  assertEquals(badRole.status, 400);
+  assertEquals((await badRole.json()).field, "responsiblePeople.0.role");
+
+  assertEquals((await store.getVillageProfile()).responsiblePeople, []);
+});
+
+Deno.test("more than the maximum number of responsible people is refused, naming the list", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const tooMany = Array.from({ length: 51 }, (_, i) => ({
+    name: `Persona ${i}`,
+    role: "Voluntario",
+  }));
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: tooMany,
+    }),
+  });
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).field, "responsiblePeople");
+  assertEquals((await store.getVillageProfile()).responsiblePeople, []);
+});
+
+Deno.test("a store failure while saving the profile surfaces as a JSON error, not a raw crash", async () => {
+  const inner = new MemoryStore();
+  // A test double that behaves exactly like `inner` (every call falls
+  // through the prototype chain to it) except the one write we want to fail
+  // — simpler than hand-writing a pass-through wrapper for all of Store.
+  const failing = Object.create(inner) as Store;
+  failing.putVillageProfile = () => Promise.reject(new Error("kv unavailable"));
+
+  const api = createPanelApi(makeConfig(), failing);
+  const cookie = await signIn(api, failing);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ escudoPhone: "", photoUrl: "", introText: "", responsiblePeople: [] }),
+  });
+  assertEquals(res.status, 500);
+  assertEquals(typeof (await res.json()).error, "string");
+});
+
+// ── Unknown keys are stripped, not merely ignored (review finding F4) ──
+//
+// This rests on zod's default strip behaviour. A later `.passthrough()` or a
+// hand-rolled parse would silently reopen exactly the door spec 3.1 and "no
+// contact details" close, so it is worth its own regression test rather than
+// resting on the schema being left alone.
+
+Deno.test("unknown top-level and per-person keys are stripped from what is stored", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+
+  const res = await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      // None of these belong in the editable config at all (spec 3.1's
+      // "deliberately absent" list) or were ever meant to be writable here.
+      villageName: "Should not exist here",
+      retentionDays: 9999,
+      emergencyLine: "999",
+      categories: ["snuck-in"],
+      responsiblePeople: [
+        {
+          name: "María G.",
+          role: "Coordinadora",
+          phone: "+34600111222",
+          email: "maria@example.org",
+        },
+      ],
+    }),
+  });
+  assertEquals(res.status, 200);
+
+  const body = await res.json();
+  assertEquals(Object.keys(body).sort(), [
+    "escudoPhone",
+    "introText",
+    "photoUrl",
+    "responsiblePeople",
+  ]);
+  assertEquals(body.responsiblePeople[0], { name: "María G.", role: "Coordinadora" });
+
+  // Not just this response — the stored record itself.
+  const stored = await store.getVillageProfile();
+  assertEquals(Object.keys(stored).sort(), [
+    "escudoPhone",
+    "introText",
+    "photoUrl",
+    "responsiblePeople",
+  ]);
+  assertEquals(Object.keys(stored.responsiblePeople[0]).sort(), ["name", "role"]);
+});
+
+Deno.test("deleting a person removes them on the next read", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(api, store);
+  const json = { "content-type": "application/json", cookie };
+
+  await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [
+        { name: "María G.", role: "Coordinadora" },
+        { name: "Luis P.", role: "Suplente" },
+      ],
+    }),
+  });
+
+  await api.request(`${BASE}/village-profile`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({
+      escudoPhone: "",
+      photoUrl: "",
+      introText: "",
+      responsiblePeople: [{ name: "María G.", role: "Coordinadora" }],
+    }),
+  });
+
+  const res = await api.request(`${BASE}/village-profile`, { headers: { cookie } });
+  const body = await res.json();
+  assertEquals(body.responsiblePeople.map((p: { name: string }) => p.name), ["María G."]);
+});
+
 Deno.test("signing out kills the session immediately", async () => {
   const { api, store } = setup();
   const cookie = await signIn(api, store);

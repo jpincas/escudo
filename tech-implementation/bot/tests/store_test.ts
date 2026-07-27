@@ -273,6 +273,58 @@ for (const [name, open] of backends) {
   });
 }
 
+// ── Public profile (spec 2026-07-27 §3) ──
+//
+// Presentation only — the point being tested here is that "nothing has ever
+// been written" is a valid, empty state rather than null or a throw, and
+// that a write replaces the row wholesale (no merge, no history).
+
+for (const [name, open] of backends) {
+  Deno.test(`${name}: an unwritten village profile reads as empty, not null`, async () => {
+    const store = await open();
+    try {
+      assertEquals(await store.getVillageProfile(), {
+        escudoPhone: null,
+        photoUrl: null,
+        introText: null,
+        responsiblePeople: [],
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: a village profile write replaces the row wholesale`, async () => {
+    const store = await open();
+    try {
+      await store.putVillageProfile({
+        escudoPhone: "+34600111222",
+        photoUrl: "https://example.org/photo.jpg",
+        introText: "Bienvenidos a la Red Escudo.",
+        responsiblePeople: [{ name: "María G.", role: "Coordinadora" }],
+      });
+      assertEquals((await store.getVillageProfile()).responsiblePeople.length, 1);
+
+      // A second write with fewer people replaces the first entirely — there
+      // is no history and no merge (spec 3.2).
+      await store.putVillageProfile({
+        escudoPhone: null,
+        photoUrl: null,
+        introText: null,
+        responsiblePeople: [],
+      });
+      assertEquals(await store.getVillageProfile(), {
+        escudoPhone: null,
+        photoUrl: null,
+        introText: null,
+        responsiblePeople: [],
+      });
+    } finally {
+      store.close();
+    }
+  });
+}
+
 Deno.test("a device stored under the old kinds comes back as wearable", () => {
   // Registries in the field predate the July 2026 merge of pendant and watch.
   assertEquals(normaliseKind("pendant"), "wearable");

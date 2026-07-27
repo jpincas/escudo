@@ -11,6 +11,9 @@
 //   ["member", telegramId]                 → Member
 //   ["device", msisdn]                     → Device
 //   ["inbox", msisdn]                      → InboxEntry (unregistered callers)
+//   ["village_profile"]                    → VillageProfile (single row; §3
+//                                              spec 2026-07-27 — presentation
+//                                              only, see its own doc in types.ts)
 //   ["panel_link", token]                  → PanelLink   (one-time, expiring)
 //   ["panel_session", token]               → PanelSession (expiring)
 //   ["meta", key]                          → string    (bot housekeeping)
@@ -26,6 +29,7 @@ import {
   type BridgeChannel,
   dayOf,
   type Device,
+  emptyVillageProfile,
   type InboxEntry,
   type Incident,
   type Member,
@@ -33,6 +37,7 @@ import {
   type PanelLink,
   type PanelSession,
   type Store,
+  type VillageProfile,
 } from "./types.ts";
 
 const incidentKey = (id: string): Deno.KvKey => ["incident", id];
@@ -41,6 +46,7 @@ const openKey = (ref: string, category: string): Deno.KvKey => ["incident_open",
 const memberKey = (telegramId: string): Deno.KvKey => ["member", telegramId];
 const deviceKey = (msisdn: string): Deno.KvKey => ["device", msisdn];
 const inboxKey = (msisdn: string): Deno.KvKey => ["inbox", msisdn];
+const villageProfileKey: Deno.KvKey = ["village_profile"];
 const panelLinkKey = (token: string): Deno.KvKey => ["panel_link", token];
 const panelSessionKey = (token: string): Deno.KvKey => ["panel_session", token];
 const metaKey = (key: string): Deno.KvKey => ["meta", key];
@@ -206,6 +212,17 @@ export class KvStore implements Store {
       deleted++;
     }
     return deleted;
+  }
+
+  // ── Public profile — presentation only, see VillageProfile's own doc ──
+
+  async getVillageProfile(): Promise<VillageProfile> {
+    const entry = await this.kv.get<VillageProfile>(villageProfileKey);
+    return entry.value ?? emptyVillageProfile();
+  }
+
+  async putVillageProfile(profile: VillageProfile): Promise<void> {
+    await this.kv.set(villageProfileKey, profile);
   }
 
   async putPanelLink(link: PanelLink): Promise<void> {

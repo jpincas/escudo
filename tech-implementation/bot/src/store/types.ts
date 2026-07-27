@@ -177,6 +177,72 @@ export interface InboxEntry {
   lastBody: string | null;
 }
 
+/** A name and a role, nothing more — see VillageProfile below. */
+export interface ResponsiblePerson {
+  name: string;
+  role: string;
+}
+
+/**
+ * The deployment's own public profile: what the welcome page (§4, spec
+ * 2026-07-27) shows about this village to a visitor. Edited from the panel's
+ * Config screen (§3).
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ NOTHING ON THE ALERT PATH MAY READ THIS TYPE OR ITS STORE METHODS.   │
+ * │ Not the bot, not the bridge, not the alert service, not the          │
+ * │ notifier, not retention. Its only two consumers are the welcome      │
+ * │ page and its own editor screen (src/panel/api.ts's                  │
+ * │ "Public profile" routes). If you find yourself importing             │
+ * │ VillageProfile, getVillageProfile or putVillageProfile from          │
+ * │ src/alerts.ts, src/bridge/*, src/telegram/* or src/jobs/*, stop —    │
+ * │ that is exactly the thing this record is not allowed to do. A bad    │
+ * │ edit here must only ever be able to make the welcome page wrong.      │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
+ * Every field is optional and independent, and the all-empty value (see
+ * emptyVillageProfile()) is a valid, expected state — a brand-new deployment
+ * has one and must render sanely. There is no history: a write replaces the
+ * single row wholesale, and the previous value is gone.
+ *
+ * Deliberately absent: the village name (stays in config.yaml — one source
+ * of truth), locale, timezone, categories, the emergency line, retention, and
+ * anything to do with domains or secrets. None of those belong to a web form.
+ */
+export interface VillageProfile {
+  /** E.164, e.g. "+34600111222" — the number a neighbour calls to raise the
+   *  alarm. Null means this deployment has no call bridge yet, or hasn't
+   *  said so. Validated as international format on write, nothing more:
+   *  this is presentation, not the bridge's own device registry. */
+  escudoPhone: string | null;
+  /**
+   * An `https` link to an image hosted elsewhere. Never a data URL and never
+   * uploaded binary — Deno KV caps a value at 64 KiB, which a usable photo
+   * exceeds. Rendered as given: no proxying, resizing or caching (spec A10),
+   * so a URL that later 404s is the welcome page's problem to degrade from,
+   * not this store's to prevent.
+   */
+  photoUrl: string | null;
+  /** A short free-text paragraph introducing this village's Red Escudo. */
+  introText: string | null;
+  /**
+   * Ordered — the welcome page shows them in this order. Name and role only:
+   * no phone numbers, no emails, no addresses. These are real people's names
+   * published to the open web (spec §3.4); the editor screen is where that
+   * is disclosed to whoever enters them, not here.
+   */
+  responsiblePeople: ResponsiblePerson[];
+}
+
+/**
+ * The valid "nothing has ever been written" state. A fresh object every
+ * call — responsiblePeople is a mutable array, and handing back a shared one
+ * would let one request's edits leak into another's.
+ */
+export function emptyVillageProfile(): VillageProfile {
+  return { escudoPhone: null, photoUrl: null, introText: null, responsiblePeople: [] };
+}
+
 /**
  * A one-time link handed out over Telegram to open the admin panel.
  *
@@ -247,6 +313,18 @@ export interface Store {
   deleteInboxEntry(msisdn: string): Promise<void>;
   /** Deletes entries last seen strictly before `cutoff` (ISO 8601). Returns the count. */
   purgeInboxBefore(cutoff: string): Promise<number>;
+
+  // ── Public profile (presentation only — see VillageProfile's own doc
+  //    above; nothing on the alert path may call either of these) ──
+  /**
+   * Never null: emptyVillageProfile() when nothing has ever been written,
+   * which is a valid state, not a missing one. May reject if the underlying
+   * read fails (e.g. KV unavailable) — that is the one failure the config
+   * screen (and only the config screen) must show.
+   */
+  getVillageProfile(): Promise<VillageProfile>;
+  /** Replaces the single row wholesale. Last write wins; no history. */
+  putVillageProfile(profile: VillageProfile): Promise<void>;
 
   // ── Panel access ──
   putPanelLink(link: PanelLink): Promise<void>;

@@ -1,9 +1,10 @@
 import { useStrings } from "../i18n/context.tsx";
 
-type PlaceholderSection = "inbox" | "history" | "config";
+type PlaceholderSection = "inbox" | "history";
 
 /**
- * Stands in for a section that §3 (config), §6 (history) or §7 (inbox) build.
+ * Stands in for a section that §6 (history) or §7 (inbox) build. Config (§3)
+ * used to be one of these; it now has a real screen (ConfigScreen.tsx).
  * States plainly that the section is coming rather than faking a finished
  * screen — a placeholder that looks done is worse than one that says what it
  * is. Reuses the same empty-state treatment the Devices screen already uses

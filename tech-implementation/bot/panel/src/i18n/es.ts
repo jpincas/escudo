@@ -37,11 +37,6 @@ export const es: Strings = {
       body: "Aquí se podrá consultar lo que ha pasado en el pueblo: cada " +
         "alerta, quién la dio y cuándo. Todavía no está construido.",
     },
-    config: {
-      heading: "Configuración",
-      body: "Aquí se podrá editar la información pública del pueblo: nombre, " +
-        "foto, teléfono y las personas responsables. Todavía no está construido.",
-    },
   },
 
   devices: {
@@ -116,5 +111,34 @@ export const es: Strings = {
     sent: "Alerta enviada. Cancélala en el grupo cuando termines.",
     duplicate: "Ya había una alerta abierta de este dispositivo, así que no se " +
       "ha enviado otra.",
+  },
+
+  config: {
+    heading: "Configuración",
+    intro: "Esta información aparece en la página pública de bienvenida del pueblo.",
+    phoneLabel: "Teléfono de Escudo",
+    phoneHelp: "El número que un vecino llama para dar la alarma. Formato " +
+      "internacional, por ejemplo +34600111222. Déjalo en blanco si este " +
+      "pueblo todavía no tiene puente de llamadas.",
+    photoLabel: "Foto (URL)",
+    photoHelp: "Enlace a una imagen alojada en otro sitio. Debe empezar por " +
+      "https://. No se puede subir un archivo.",
+    introTextLabel: "Texto de presentación",
+    introTextHelp: "Un párrafo breve presentando la Red Escudo de este pueblo.",
+    peopleHeading: "Personas responsables",
+    peopleNotice: "Estos nombres se publican en la página pública del pueblo, " +
+      "indexable por los buscadores: puede verlos cualquiera en internet, no " +
+      "solo quien tenga el enlace. Antes de añadir a alguien, dile que su " +
+      "nombre y su función aparecerán ahí.",
+    peopleEmpty: "Todavía no se ha añadido ninguna persona responsable.",
+    nameLabel: "Nombre",
+    roleLabel: "Función",
+    addPerson: "Añadir persona",
+    removePerson: "Eliminar",
+    moveUp: "Subir",
+    moveDown: "Bajar",
+    save: "Guardar",
+    saving: "Guardando…",
+    saved: "Guardado.",
   },
 };

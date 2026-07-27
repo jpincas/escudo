@@ -6,6 +6,7 @@
 import type { ReactElement } from "react";
 import type { Strings } from "./i18n/types.ts";
 import type { SectionId } from "./router.ts";
+import { ConfigScreen } from "./components/ConfigScreen.tsx";
 import { DevicesScreen } from "./components/DevicesScreen.tsx";
 import { PlaceholderScreen } from "./components/PlaceholderScreen.tsx";
 
@@ -27,9 +28,5 @@ export const SECTIONS: Section[] = [
     label: (s) => s.sidebar.history,
     Component: () => <PlaceholderScreen section="history" />,
   },
-  {
-    id: "config",
-    label: (s) => s.sidebar.config,
-    Component: () => <PlaceholderScreen section="config" />,
-  },
+  { id: "config", label: (s) => s.sidebar.config, Component: ConfigScreen },
 ];

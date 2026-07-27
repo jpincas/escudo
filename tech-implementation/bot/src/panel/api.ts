@@ -11,7 +11,14 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Config } from "../config.ts";
-import type { Device, DeviceKind, PanelSession, Store } from "../store/types.ts";
+import type {
+  Device,
+  DeviceKind,
+  PanelSession,
+  ResponsiblePerson,
+  Store,
+  VillageProfile,
+} from "../store/types.ts";
 import { clearedCookie, exchangeLink, sessionCookie, tokenFromCookies } from "./auth.ts";
 import type { AlertService } from "../alerts.ts";
 import { DEFAULT_CATEGORY } from "../bridge/inbound.ts";
@@ -34,6 +41,16 @@ const MESSAGES = {
     notFound: "No existe ningún dispositivo con ese número.",
     invalid: "Faltan datos o no son válidos.",
     simulateUnavailable: "Las alertas de prueba no están disponibles en esta instalación.",
+    badPhotoUrl: "La URL de la foto debe empezar por https://.",
+    photoUrlTooLong: "La URL de la foto es demasiado larga (máximo 2000 caracteres).",
+    introTextTooLong: "El texto de presentación es demasiado largo (máximo 2000 caracteres).",
+    personNameRequired: "Cada persona responsable necesita un nombre.",
+    personNameTooLong: "El nombre es demasiado largo (máximo 200 caracteres).",
+    personRoleRequired: "Cada persona responsable necesita una función.",
+    personRoleTooLong: "La función es demasiado larga (máximo 200 caracteres).",
+    tooManyResponsiblePeople: "Se pueden añadir como máximo 50 personas responsables.",
+    profileUnavailable: "No se ha podido leer la configuración pública. Inténtalo de nuevo.",
+    profileWriteFailed: "No se ha podido guardar la configuración pública. Inténtalo de nuevo.",
   },
   en: {
     unauthorized: "Session expired. Ask the bot for a new link with /panel.",
@@ -43,6 +60,16 @@ const MESSAGES = {
     notFound: "No device is registered with that number.",
     invalid: "Something is missing or invalid.",
     simulateUnavailable: "Test alerts are not available in this deployment.",
+    badPhotoUrl: "The photo URL must start with https://.",
+    photoUrlTooLong: "The photo URL is too long (2000 characters maximum).",
+    introTextTooLong: "The intro text is too long (2000 characters maximum).",
+    personNameRequired: "Every responsible person needs a name.",
+    personNameTooLong: "The name is too long (200 characters maximum).",
+    personRoleRequired: "Every responsible person needs a role.",
+    personRoleTooLong: "The role is too long (200 characters maximum).",
+    tooManyResponsiblePeople: "At most 50 responsible people can be added.",
+    profileUnavailable: "Could not read the public config. Try again.",
+    profileWriteFailed: "Could not save the public config. Try again.",
   },
 } as const;
 
@@ -65,6 +92,28 @@ const UpdateDevice = z.object({
   address: z.string().trim().min(1).optional(),
   kind: z.enum(KINDS).optional(),
 });
+
+// The village profile is written as one row, not patched field by field
+// (spec 3.2: "no history, last write wins"): the form always holds the
+// current value of every field, so a save always sends the whole thing. An
+// empty string means "not set" for the three scalar fields — the schema only
+// checks shape here; emptiness and format are decided below, field by field,
+// so a rejected edit can say exactly which one was wrong.
+const WriteVillageProfile = z.object({
+  escudoPhone: z.string(),
+  photoUrl: z.string(),
+  introText: z.string(),
+  responsiblePeople: z.array(z.object({ name: z.string(), role: z.string() })),
+});
+
+// Sensible bounds, checked field by field like everything else here (a
+// field-named 400, not a bare 500 from Deno KV's 64 KiB value cap — the
+// whole record, phone/photo/intro/people together, has to fit in one entry).
+const MAX_PHOTO_URL_LENGTH = 2000;
+const MAX_INTRO_TEXT_LENGTH = 2000;
+const MAX_PERSON_NAME_LENGTH = 200;
+const MAX_PERSON_ROLE_LENGTH = 200;
+const MAX_RESPONSIBLE_PEOPLE = 50;
 
 export type DeviceStatus = "ok" | "overdue" | "never";
 
@@ -295,6 +344,109 @@ export function createPanelApi(
     // a second success: the operator pressed a button and nothing new reached the
     // group, and they need to know which of those happened.
     return c.json({ status: result.status, incident: result.incident });
+  });
+
+  // ── Public profile (spec 2026-07-27 §3) ──
+  //
+  // Presentation only, for the welcome page (§4, not built here) and this
+  // editor. See VillageProfile's own doc in src/store/types.ts for the hard
+  // rule this section exists under: nothing here may be imported by, or
+  // wired into, the alert path. The welcome page reads the record straight
+  // off the store — it has no session, so it cannot and must not call
+  // these routes.
+
+  const isHttpsUrl = (value: string): boolean => {
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  api.get("/village-profile", async (c) => {
+    // A read failure here must surface as an error on the config screen and
+    // nowhere else (spec 3.3) — every other route in this file is unaffected
+    // by this one throwing, but a plain 500 would still deny the SPA a body
+    // it can show. This is the one place in the API that expects the store
+    // to possibly fail and says so in the village's own language.
+    try {
+      return c.json(await store.getVillageProfile());
+    } catch {
+      return c.json({ error: m.profileUnavailable }, 500);
+    }
+  });
+
+  api.put("/village-profile", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = WriteVillageProfile.safeParse(body);
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    // Validated and normalised field by field, in the order a coordinator
+    // fills the form, so a rejected edit says exactly which one was wrong
+    // (spec 3.2) and — because nothing is written until every field has
+    // passed — the stored record is untouched by a partially-valid submit.
+
+    let escudoPhone: string | null = null;
+    const rawPhone = parsed.data.escudoPhone.trim();
+    if (rawPhone) {
+      const normalised = normaliseMsisdn(rawPhone);
+      if (!MSISDN.test(normalised)) {
+        return c.json({ error: m.badMsisdn, field: "escudoPhone" }, 400);
+      }
+      escudoPhone = normalised;
+    }
+
+    let photoUrl: string | null = null;
+    const rawPhoto = parsed.data.photoUrl.trim();
+    if (rawPhoto) {
+      if (rawPhoto.length > MAX_PHOTO_URL_LENGTH) {
+        return c.json({ error: m.photoUrlTooLong, field: "photoUrl" }, 400);
+      }
+      if (!isHttpsUrl(rawPhoto)) {
+        return c.json({ error: m.badPhotoUrl, field: "photoUrl" }, 400);
+      }
+      photoUrl = rawPhoto;
+    }
+
+    const rawIntro = parsed.data.introText.trim();
+    if (rawIntro.length > MAX_INTRO_TEXT_LENGTH) {
+      return c.json({ error: m.introTextTooLong, field: "introText" }, 400);
+    }
+    const introText = rawIntro || null;
+
+    if (parsed.data.responsiblePeople.length > MAX_RESPONSIBLE_PEOPLE) {
+      return c.json({ error: m.tooManyResponsiblePeople, field: "responsiblePeople" }, 400);
+    }
+
+    const responsiblePeople: ResponsiblePerson[] = [];
+    for (let i = 0; i < parsed.data.responsiblePeople.length; i++) {
+      const name = parsed.data.responsiblePeople[i].name.trim();
+      const role = parsed.data.responsiblePeople[i].role.trim();
+      if (!name) {
+        return c.json({ error: m.personNameRequired, field: `responsiblePeople.${i}.name` }, 400);
+      }
+      if (name.length > MAX_PERSON_NAME_LENGTH) {
+        return c.json({ error: m.personNameTooLong, field: `responsiblePeople.${i}.name` }, 400);
+      }
+      if (!role) {
+        return c.json({ error: m.personRoleRequired, field: `responsiblePeople.${i}.role` }, 400);
+      }
+      if (role.length > MAX_PERSON_ROLE_LENGTH) {
+        return c.json({ error: m.personRoleTooLong, field: `responsiblePeople.${i}.role` }, 400);
+      }
+      responsiblePeople.push({ name, role });
+    }
+
+    const profile: VillageProfile = { escudoPhone, photoUrl, introText, responsiblePeople };
+    // Wrapped like the GET route: a KV write can fail (e.g. the 64 KiB value
+    // cap, or the store being briefly unavailable), and that must surface as
+    // a JSON error the config screen can show — not a bare, unlabelled 500.
+    try {
+      await store.putVillageProfile(profile);
+    } catch {
+      return c.json({ error: m.profileWriteFailed }, 500);
+    }
+    return c.json(profile);
   });
 
   return api;

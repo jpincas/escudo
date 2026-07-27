@@ -2,7 +2,7 @@
 // functions rather than calling fetch directly, so the error contract
 // ({error: string} on any non-2xx) is honoured in exactly one spot.
 
-import type { Device, DeviceEdit, Me, NewDevice } from "./types.ts";
+import type { Device, DeviceEdit, Me, NewDevice, VillageProfile, VillageProfileWrite } from "./types.ts";
 import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
 
 /**
@@ -12,13 +12,17 @@ import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
  * validation problem (e.g. "msisdn already registered"). `locale` is carried
  * only by the session endpoints (see SessionResult below) — it's how a
  * signed-out visitor's screen knows which language to use, since there is no
- * session yet to read a locale from.
+ * session yet to read a locale from. `field` is carried only by the village
+ * profile's write endpoint (spec 2026-07-27 §3): which field was rejected, so
+ * the config form can show the error against that field rather than a
+ * generic banner.
  */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
     public readonly locale?: Locale,
+    public readonly field?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -45,9 +49,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => null) as
-      | { error?: string; locale?: Locale }
+      | { error?: string; locale?: Locale; field?: string }
       | null;
-    throw new ApiError(res.status, body?.error ?? GENERIC_ERROR, body?.locale);
+    throw new ApiError(res.status, body?.error ?? GENERIC_ERROR, body?.locale, body?.field);
   }
 
   return res.json() as Promise<T>;
@@ -150,4 +154,21 @@ export async function sendTestAlert(
     `/api/devices/${encodeURIComponent(msisdn)}/simulate`,
     { method: "POST", body: JSON.stringify({ category }) },
   );
+}
+
+// ── Village profile (spec 2026-07-27 §3) ──
+//
+// Presentation only for the (separately built) welcome page and this editor.
+// Nothing about the alert path reads this — see the same rule spelled out on
+// VillageProfile in the backend's src/store/types.ts.
+
+export async function fetchVillageProfile(): Promise<VillageProfile> {
+  return request<VillageProfile>("/api/village-profile");
+}
+
+export async function saveVillageProfile(body: VillageProfileWrite): Promise<VillageProfile> {
+  return request<VillageProfile>("/api/village-profile", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 }
