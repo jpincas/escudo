@@ -1,12 +1,14 @@
-// Date rendering for the panel. There is exactly one date the UI shows —
-// lastProvenAt — and it must read as an absolute date: this is a desktop
-// tool for a coordinator deciding whether a device is overdue, not a social
-// feed where "3 weeks ago" is good enough.
+// Date rendering for the panel.
 //
-// The backend gives no village timezone (unlike the bot itself, which has
-// `village.timezone` in config.yaml — see the bot's own src/format.ts). The
-// panel renders in the browser's local timezone; that's the coordinator's
-// own machine, which for this single-village tool is the village.
+// Two different rules for two different screens. Devices shows exactly one
+// date — lastProvenAt — as an absolute date in the *browser's* local
+// timezone: this is a desktop tool for a coordinator deciding whether a
+// device is overdue, and for that one purpose the coordinator's own machine
+// is close enough to the village. History (§6, spec 2026-07-27) is
+// different: it must read the same regardless of where the admin happens to
+// be sitting, so it renders in the *village's* configured timezone
+// (config.village.timezone, carried down from GET /api/session — see
+// village-context.tsx) — never the browser's.
 
 import type { Locale } from "./i18n/mod.ts";
 
@@ -23,5 +25,16 @@ export function formatDateTime(iso: string, locale: Locale): string {
   return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
     dateStyle: "medium",
     timeStyle: "short",
+  }).format(new Date(iso));
+}
+
+/** Same rendering as formatDateTime, pinned to a specific IANA timezone
+ *  rather than the browser's — for History, where the village's own clock is
+ *  the whole point, not whichever machine a coordinator is signed in from. */
+export function formatDateTimeInZone(iso: string, locale: Locale, timeZone: string): string {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
   }).format(new Date(iso));
 }

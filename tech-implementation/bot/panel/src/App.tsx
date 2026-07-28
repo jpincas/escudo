@@ -5,6 +5,7 @@ import { SignedOutView } from "./components/SignedOutView.tsx";
 import { useSession } from "./hooks/useSession.ts";
 import { FALLBACK_LOCALE } from "./i18n/mod.ts";
 import { LocaleProvider } from "./i18n/context.tsx";
+import { VillageProvider } from "./village-context.tsx";
 
 /**
  * Resolve the session, then show one of: loading, the signed-out explainer,
@@ -53,7 +54,9 @@ export function App() {
     case "signedIn":
       return (
         <LocaleProvider locale={state.me.locale}>
-          <Shell me={state.me} onSignOut={signOut} />
+          <VillageProvider timezone={state.me.timezone} retentionDays={state.me.retentionDays}>
+            <Shell me={state.me} onSignOut={signOut} />
+          </VillageProvider>
         </LocaleProvider>
       );
   }

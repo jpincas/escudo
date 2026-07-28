@@ -10,6 +10,7 @@
 import { assertEquals } from "@std/assert";
 import { createPanelApi } from "../src/panel/api.ts";
 import { SESSION_COOKIE } from "../src/panel/auth.ts";
+import { KvStore } from "../src/store/kv.ts";
 import { MemoryStore } from "../src/store/memory.ts";
 import type { Store } from "../src/store/types.ts";
 import { makeConfig } from "./helpers.ts";
@@ -18,6 +19,17 @@ const BASE = "http://localhost";
 
 function setup(): { api: ReturnType<typeof createPanelApi>; store: Store } {
   const store = new MemoryStore();
+  return { api: createPanelApi(makeConfig(), store), store };
+}
+
+/**
+ * Same wiring as setup(), but backed by real Deno KV rather than MemoryStore.
+ * Production always runs on KvStore (main.ts never opens a MemoryStore), so a
+ * few things — like exactly which cursor strings KV's own decode rejects —
+ * are only faithfully reproduced against it, not against the in-memory double.
+ */
+async function setupKv(): Promise<{ api: ReturnType<typeof createPanelApi>; store: Store }> {
+  const store = new KvStore(await Deno.openKv(":memory:"));
   return { api: createPanelApi(makeConfig(), store), store };
 }
 
@@ -509,6 +521,255 @@ Deno.test("deleting a person removes them on the next read", async () => {
   const res = await api.request(`${BASE}/village-profile`, { headers: { cookie } });
   const body = await res.json();
   assertEquals(body.responsiblePeople.map((p: { name: string }) => p.name), ["María G."]);
+});
+
+// ── History (spec 2026-07-27 §6) ──
+
+Deno.test("the incidents route is refused without a session", async () => {
+  const { api } = setup();
+  assertEquals((await api.request(`${BASE}/incidents`)).status, 401);
+});
+
+Deno.test("session carries the village timezone and retention window", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  const res = await api.request(`${BASE}/session`, { headers: { cookie } });
+  const body = await res.json();
+  assertEquals(body.timezone, "Europe/Madrid");
+  assertEquals(body.retentionDays, 365);
+});
+
+Deno.test("incidents come back newest-first, with the configured category and the snapshotted reporter", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.putIncident({
+    id: "aaaaaaaaa-0001",
+    source: "device",
+    category: "fuego",
+    reporterRef: "+34600111222",
+    reporterName: "Casa de María",
+    reporterAddress: "Calle Real 14",
+    reporterKind: "alarm",
+    simulatedBy: null,
+    groupMessageId: 10,
+    lat: 42.5,
+    lon: -5.2,
+    createdAt: "2026-07-20T10:00:00.000Z",
+    cancelledAt: null,
+    cancelledBy: null,
+  });
+  await store.putIncident({
+    id: "bbbbbbbbb-0002",
+    source: "telegram",
+    category: "medico",
+    reporterRef: "42",
+    reporterName: "Luis P.",
+    reporterAddress: null,
+    reporterKind: null,
+    simulatedBy: null,
+    groupMessageId: 11,
+    lat: null,
+    lon: null,
+    createdAt: "2026-07-21T10:00:00.000Z",
+    cancelledAt: null,
+    cancelledBy: null,
+  });
+
+  const res = await api.request(`${BASE}/incidents`, { headers: { cookie } });
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.incidents.map((i: { id: string }) => i.id), [
+    "bbbbbbbbb-0002",
+    "aaaaaaaaa-0001",
+  ]);
+
+  const device = body.incidents[1];
+  assertEquals(device.categoryId, "fuego");
+  assertEquals(device.categoryEmoji, "🔥");
+  assertEquals(device.reporterName, "Casa de María");
+  assertEquals(device.reporterAddress, "Calle Real 14");
+  assertEquals(device.reporterKind, "alarm");
+  assertEquals(device.lat, 42.5);
+  assertEquals(device.lon, -5.2);
+});
+
+// Review finding (2026-07-28): reporterAddress and reporterKind are
+// independent snapshotted fields (spec §6.1) — an incident can carry one
+// without the other, and each must come back regardless of whether its
+// sibling is set. IncidentTable.tsx's own rendering already guards this
+// (`||`, not `&&` — see its "review F3" comment); this is the data-contract
+// half, so the case doesn't depend on a live record sitting in a village's
+// own incident log to stay proven.
+Deno.test("an incident with an address but no kind still returns the address", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.putIncident({
+    id: "aaaaaaaaa-0001",
+    source: "device",
+    category: "fuego",
+    reporterRef: "+34600999000",
+    reporterName: "Sin tipo",
+    reporterAddress: "Calle Sin Tipo 1",
+    reporterKind: null,
+    simulatedBy: null,
+    groupMessageId: null,
+    lat: null,
+    lon: null,
+    createdAt: "2026-07-20T10:00:00.000Z",
+    cancelledAt: null,
+    cancelledBy: null,
+  });
+
+  const res = await api.request(`${BASE}/incidents`, { headers: { cookie } });
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.incidents[0].reporterAddress, "Calle Sin Tipo 1");
+  assertEquals(body.incidents[0].reporterKind, null);
+});
+
+Deno.test("a drill and a cancellation are visible in what the route returns", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.putIncident({
+    id: "aaaaaaaaa-0001",
+    source: "device",
+    category: "emergencia",
+    reporterRef: "+34600111222",
+    reporterName: "Casa de María",
+    reporterAddress: "Calle Real 14",
+    reporterKind: "alarm",
+    simulatedBy: "Jon",
+    groupMessageId: null,
+    lat: null,
+    lon: null,
+    createdAt: "2026-07-20T10:00:00.000Z",
+    cancelledAt: null,
+    cancelledBy: null,
+  });
+  await store.putIncident({
+    id: "bbbbbbbbb-0002",
+    source: "telegram",
+    category: "fuego",
+    reporterRef: "42",
+    reporterName: "Luis P.",
+    reporterAddress: null,
+    reporterKind: null,
+    simulatedBy: null,
+    groupMessageId: 12,
+    lat: null,
+    lon: null,
+    createdAt: "2026-07-21T10:00:00.000Z",
+    cancelledAt: "2026-07-21T10:05:00.000Z",
+    cancelledBy: "42",
+  });
+
+  const res = await api.request(`${BASE}/incidents`, { headers: { cookie } });
+  const body = await res.json();
+  const drill = body.incidents.find((i: { id: string }) => i.id === "aaaaaaaaa-0001");
+  const cancelled = body.incidents.find((i: { id: string }) => i.id === "bbbbbbbbb-0002");
+  assertEquals(drill.simulatedBy, "Jon");
+  assertEquals(cancelled.cancelledAt, "2026-07-21T10:05:00.000Z");
+});
+
+Deno.test("incidents are paged, not returned as the whole log, and the second page continues where the first stopped", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  // One more than HISTORY_PAGE_SIZE (20), so a default-size first page must
+  // leave exactly one incident for the second.
+  for (let i = 0; i < 21; i++) {
+    await store.putIncident({
+      id: `id-${String(i).padStart(4, "0")}`,
+      source: "telegram",
+      category: "fuego",
+      reporterRef: "42",
+      reporterName: "Luis P.",
+      reporterAddress: null,
+      reporterKind: null,
+      simulatedBy: null,
+      groupMessageId: null,
+      lat: null,
+      lon: null,
+      createdAt: `2026-07-${String(1 + i).padStart(2, "0")}T10:00:00.000Z`,
+      cancelledAt: null,
+      cancelledBy: null,
+    });
+  }
+
+  const first = await api.request(`${BASE}/incidents`, { headers: { cookie } });
+  const firstBody = await first.json();
+  assertEquals(firstBody.incidents.length, 20);
+  assertEquals(firstBody.nextCursor !== null, true);
+  // Newest (day 21) first.
+  assertEquals(firstBody.incidents[0].id, "id-0020");
+
+  const second = await api.request(
+    `${BASE}/incidents?cursor=${encodeURIComponent(firstBody.nextCursor)}`,
+    { headers: { cookie } },
+  );
+  const secondBody = await second.json();
+  assertEquals(secondBody.incidents.map((i: { id: string }) => i.id), ["id-0000"]);
+  assertEquals(secondBody.nextCursor, null);
+});
+
+// Review F1: every one of these reached KV as a real cursor and threw a raw
+// TypeError, caught only by Deno's default handler (500, not a JSON body).
+// A cursor this API cannot interpret is malformed input like any other and
+// must answer the same defined 400 shape as a bad phone number or a
+// too-long name — never a crash.
+Deno.test("an uninterpretable cursor is refused with a usable 400, never a 500", async () => {
+  // Against real KV, not MemoryStore: this is the exact live reproduction
+  // (§6 review, F1), and one of these strings — a well-formed MemoryStore
+  // cursor — is only meaningless to *this* backend, not to every backend, so
+  // testing it here is the only way to actually exercise that failure.
+  const { api, store } = await setupKv();
+  const cookie = await signIn(store);
+
+  const badCursors = [
+    "garbage",
+    " ", // arrives as "%20"
+    "0mrxtbg5c-097b7fea", // a well-formed MemoryStore cursor, meaningless to KV
+    "AjIwMjYtMDctMjMAAjBtcnh0Ymc1Yy0wOTdiN2ZlYQ", // a truncated real KV cursor
+  ];
+
+  for (const cursor of badCursors) {
+    const res = await api.request(
+      `${BASE}/incidents?cursor=${encodeURIComponent(cursor)}`,
+      { headers: { cookie } },
+    );
+    assertEquals(res.status, 400, `cursor ${JSON.stringify(cursor)} should be a 400`);
+    assertEquals(typeof (await res.json()).error, "string");
+  }
+  store.close();
+});
+
+Deno.test("an empty cursor is treated as no cursor, not as a malformed one", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+  await store.putIncident({
+    id: "aaaaaaaaa-0001",
+    source: "telegram",
+    category: "fuego",
+    reporterRef: "42",
+    reporterName: "Luis P.",
+    reporterAddress: null,
+    reporterKind: null,
+    simulatedBy: null,
+    groupMessageId: null,
+    lat: null,
+    lon: null,
+    createdAt: "2026-07-20T10:00:00.000Z",
+    cancelledAt: null,
+    cancelledBy: null,
+  });
+
+  const res = await api.request(`${BASE}/incidents?cursor=`, { headers: { cookie } });
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).incidents.length, 1);
 });
 
 Deno.test("signing out kills the session immediately", async () => {

@@ -44,6 +44,8 @@ import {
   emptyVillageProfile,
   type InboxEntry,
   type Incident,
+  type IncidentPage,
+  InvalidCursorError,
   type Member,
   migrateDevice,
   type PanelCode,
@@ -130,6 +132,47 @@ export class KvStore implements Store {
       if (incident) incidents.push(incident);
     }
     return incidents;
+  }
+
+  /**
+   * Reads `limit + 1` rows so it can tell, in this same round trip, whether
+   * there is a further page — without that peek, "does another page exist"
+   * would cost a whole extra request that comes back empty. The cursor
+   * handed back is Deno KV's own list cursor, captured right after the
+   * `limit`-th row: replaying it resumes exactly where this page stopped,
+   * never re-showing or skipping a row.
+   */
+  async listIncidentsPage(limit: number, cursor: string | null): Promise<IncidentPage> {
+    const iter = this.kv.list<string>(
+      { prefix: ["incident_by_day"] },
+      { reverse: true, limit: limit + 1, cursor: cursor ?? undefined },
+    );
+
+    const incidents: Incident[] = [];
+    let cursorAtLimit: string | null = null;
+    let count = 0;
+    try {
+      for await (const entry of iter) {
+        count++;
+        if (count > limit) break; // the peek row — its presence means more exist
+        const incident = await this.getIncident(entry.value);
+        if (incident) incidents.push(incident);
+        cursorAtLimit = iter.cursor;
+      }
+    } catch (err) {
+      // Deno KV validates the cursor lazily, on the first row consumed, not
+      // when list() is called — so this is where a garbage, truncated, or
+      // wrong-backend cursor throws. A real one it deleted since (e.g. the
+      // row retention purged) never reaches here: KV's cursor is a position
+      // in the key range, not a promise that a specific key still exists,
+      // so it keeps working after the row behind it is gone. Only cursor
+      // decode failures are TypeErrors; anything else is a genuine fault
+      // and must keep surfacing as one, not get relabelled as bad input.
+      if (cursor !== null && err instanceof TypeError) throw new InvalidCursorError();
+      throw err;
+    }
+
+    return { incidents, nextCursor: count > limit ? cursorAtLimit : null };
   }
 
   async purgeIncidentsBefore(cutoff: string): Promise<number> {

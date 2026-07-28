@@ -4,10 +4,16 @@
 // between them passes everything else and breaks the village — so every
 // behavioural rule the core relies on is asserted against both here.
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { KvStore } from "../src/store/kv.ts";
 import { MemoryStore } from "../src/store/memory.ts";
-import { type Device, type Incident, normaliseKind, type Store } from "../src/store/types.ts";
+import {
+  type Device,
+  type Incident,
+  InvalidCursorError,
+  normaliseKind,
+  type Store,
+} from "../src/store/types.ts";
 
 const backends: Array<[string, () => Promise<Store>]> = [
   ["MemoryStore", async () => new MemoryStore()],
@@ -76,6 +82,195 @@ for (const [name, open] of backends) {
     const ids = (await store.listIncidents()).map((i) => i.id);
     assertEquals(ids, ["ccccccccc-0003", "bbbbbbbbb-0002", "aaaaaaaaa-0001"]);
     store.close();
+  });
+
+  // §6 (spec 2026-07-27): the History screen's only read. Built on the same
+  // day index listIncidents() scans, but must stop after `limit` rather than
+  // loading the whole log — this is the behaviour a screen actually depends
+  // on, so it is pinned here rather than trusted from the implementation.
+  Deno.test(`${name}: pages incidents newest-first, without loading the whole log`, async () => {
+    const store = await open();
+    try {
+      // Five incidents, oldest to newest by id/createdAt.
+      const ids = [
+        "aaaaaaaaa-0001",
+        "bbbbbbbbb-0002",
+        "ccccccccc-0003",
+        "ddddddddd-0004",
+        "eeeeeeeee-0005",
+      ];
+      for (let i = 0; i < ids.length; i++) {
+        await store.putIncident(
+          incident({ id: ids[i], createdAt: `2026-07-${18 + i}T10:00:00.000Z` }),
+        );
+      }
+
+      // First page: the two newest, and more to come.
+      const page1 = await store.listIncidentsPage(2, null);
+      assertEquals(page1.incidents.map((i) => i.id), ["eeeeeeeee-0005", "ddddddddd-0004"]);
+      assertEquals(page1.nextCursor !== null, true);
+
+      // Second page picks up exactly where the first left off — no repeat,
+      // no gap across the boundary.
+      const page2 = await store.listIncidentsPage(2, page1.nextCursor);
+      assertEquals(page2.incidents.map((i) => i.id), ["ccccccccc-0003", "bbbbbbbbb-0002"]);
+      assertEquals(page2.nextCursor !== null, true);
+
+      // Last page: one row left, and nextCursor says so.
+      const page3 = await store.listIncidentsPage(2, page2.nextCursor);
+      assertEquals(page3.incidents.map((i) => i.id), ["aaaaaaaaa-0001"]);
+      assertEquals(page3.nextCursor, null);
+
+      // A page sized to fit the whole log exactly still reports no further
+      // page — the boundary must not depend on a wasted extra request.
+      const wholeLog = await store.listIncidentsPage(5, null);
+      assertEquals(wholeLog.incidents.length, 5);
+      assertEquals(wholeLog.nextCursor, null);
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: a drill and a cancellation both survive into a page`, async () => {
+    const store = await open();
+    try {
+      await store.putIncident(
+        incident({
+          id: "aaaaaaaaa-0001",
+          simulatedBy: "Jon",
+          createdAt: "2026-07-20T10:00:00.000Z",
+        }),
+      );
+      await store.putIncident(
+        incident({
+          id: "bbbbbbbbb-0002",
+          cancelledAt: "2026-07-21T11:00:00.000Z",
+          cancelledBy: "42",
+          createdAt: "2026-07-21T10:00:00.000Z",
+        }),
+      );
+
+      const page = await store.listIncidentsPage(10, null);
+      const drill = page.incidents.find((i) => i.id === "aaaaaaaaa-0001");
+      const cancelled = page.incidents.find((i) => i.id === "bbbbbbbbb-0002");
+      assertEquals(drill?.simulatedBy, "Jon");
+      assertEquals(cancelled?.cancelledAt, "2026-07-21T11:00:00.000Z");
+      assertEquals(cancelled?.cancelledBy, "42");
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: an empty log pages as an empty, final page`, async () => {
+    const store = await open();
+    try {
+      const page = await store.listIncidentsPage(10, null);
+      assertEquals(page.incidents, []);
+      assertEquals(page.nextCursor, null);
+    } finally {
+      store.close();
+    }
+  });
+
+  // Review finding (2026-07-28): a cursor neither backend could ever have
+  // issued must be rejected, not silently treated as page one — the same
+  // "passes on Memory, breaks in production" trap an earlier finding fell
+  // into. The first remedy only narrowed this: MemoryStore accepted any
+  // string shaped like an incident id, so a caller-invented string that
+  // happened to sort above every real id (e.g. "zzz-fff") still slipped
+  // through as an indistinguishable fresh page one. This probes the whole
+  // class, not one string.
+  Deno.test(`${name}: never silently restarts on a cursor-shaped string it never issued`, async () => {
+    const store = await open();
+    try {
+      await store.putIncident(
+        incident({ id: "aaaaaaaaa-0001", createdAt: "2026-07-18T10:00:00.000Z" }),
+      );
+      await store.putIncident(
+        incident({ id: "bbbbbbbbb-0002", createdAt: "2026-07-19T10:00:00.000Z" }),
+      );
+      await store.putIncident(
+        incident({ id: "ccccccccc-0003", createdAt: "2026-07-20T10:00:00.000Z" }),
+      );
+
+      // Every one of these must throw on both backends: outright garbage,
+      // a truncated/foreign-shaped cursor, and — the class the first remedy
+      // missed — strings shaped like a real incident id (or one sorting
+      // above every real id) that neither store ever handed out as a cursor.
+      const rejected = [
+        "not a real cursor",
+        "garbage",
+        " ",
+        "AjIwMjYtMDctMjMAAjBtcnh0Ymc1Yy0wOTdiN2ZlYQ",
+        "0mrxtbg5c-097b7fea",
+        "zzz-fff",
+        "abc-123",
+        "0zzzzzzzz-ffff",
+      ];
+      for (const cursor of rejected) {
+        await assertRejects(
+          () => store.listIncidentsPage(10, cursor),
+          InvalidCursorError,
+          undefined,
+          `expected ${name} to reject cursor ${JSON.stringify(cursor)}`,
+        );
+      }
+
+      // "AAAA" is the one input where the two backends are allowed to
+      // diverge under the actual invariant (see listIncidentsPage's own
+      // doc): it decodes for KvStore as a real, if unusual, position past
+      // the end of the log — not a restart, so an empty final page is the
+      // correct answer — while MemoryStore, which only recognises its own
+      // tagged cursors, never issued it and throws. Both honour "never
+      // silently restart from page one"; only the shape of that honesty
+      // differs.
+      if (name === "KvStore") {
+        const page = await store.listIncidentsPage(10, "AAAA");
+        assertEquals(page.incidents, []);
+        assertEquals(page.nextCursor, null);
+      } else {
+        await assertRejects(() => store.listIncidentsPage(10, "AAAA"), InvalidCursorError);
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  // A cursor that *was* real when issued, but names a row retention has since
+  // deleted, is a different case from the one above and must not throw: it is
+  // a position in the log, not a promise that specific row still exists.
+  Deno.test(`${name}: a cursor naming a since-purged incident still resumes cleanly`, async () => {
+    const store = await open();
+    try {
+      await store.putIncident(
+        incident({ id: "aaaaaaaaa-0001", createdAt: "2026-07-18T10:00:00.000Z" }),
+      );
+      await store.putIncident(
+        incident({ id: "bbbbbbbbb-0002", createdAt: "2026-07-19T10:00:00.000Z" }),
+      );
+      await store.putIncident(
+        incident({ id: "ccccccccc-0003", createdAt: "2026-07-20T10:00:00.000Z" }),
+      );
+
+      // Page 1 (newest two) leaves the cursor sitting right behind
+      // bbbbbbbbb-0002 — the oldest row this page returned.
+      const page1 = await store.listIncidentsPage(2, null);
+      assertEquals(page1.incidents.map((i) => i.id), ["ccccccccc-0003", "bbbbbbbbb-0002"]);
+      const cursor = page1.nextCursor!;
+
+      // Retention runs before the admin turns the page: everything up to and
+      // including the row the cursor names is now gone.
+      assertEquals(await store.purgeIncidentsBefore("2026-07-20T00:00:00.000Z"), 2);
+
+      // Resuming from that cursor must not throw — there is legitimately
+      // nothing left behind it, which is an ordinary empty final page, not
+      // an error.
+      const page2 = await store.listIncidentsPage(2, cursor);
+      assertEquals(page2.incidents, []);
+      assertEquals(page2.nextCursor, null);
+    } finally {
+      store.close();
+    }
   });
 
   Deno.test(`${name}: purges only incidents older than the cutoff`, async () => {

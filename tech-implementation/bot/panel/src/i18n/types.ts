@@ -6,7 +6,7 @@
 //
 // Placeholders are {braced} and substituted by `t()` in mod.ts.
 
-import type { DeviceKind, DeviceStatus } from "../api/types.ts";
+import type { DeviceKind, DeviceStatus, IncidentSource } from "../api/types.ts";
 
 export interface Strings {
   /** Browser tab title. */
@@ -39,10 +39,9 @@ export interface Strings {
   };
 
   /** Section placeholders — replaced one screen at a time by §3, §6 and §7.
-   *  Config no longer has one: its real screen is below. */
+   *  Config and History no longer have one: their real screens are below. */
   placeholder: {
     inbox: { heading: string; body: string };
-    history: { heading: string; body: string };
   };
 
   devices: {
@@ -134,5 +133,34 @@ export interface Strings {
     save: string;
     saving: string;
     saved: string;
+  };
+
+  /**
+   * The History screen (spec 2026-07-27 §6): what has actually happened in
+   * the village, newest first, read-only, paged. See PlaceholderScreen for
+   * what this replaced.
+   */
+  history: {
+    heading: string;
+    /** States the retention window plainly — {days}. Not a permanent
+     *  archive: what has aged out is gone, by design and by law. */
+    intro: string;
+    empty: { heading: string; body: string };
+    columns: {
+      when: string;
+      category: string;
+      source: string;
+      who: string;
+      location: string;
+      drill: string;
+      cancelled: string;
+    };
+    source: Record<IncidentSource, string>;
+    locationLink: string;
+    /** {name} — who ran the drill. */
+    drillBy: string;
+    /** {when} — already formatted in the village timezone. */
+    cancelledAt: string;
+    pagination: { prev: string; next: string };
   };
 }

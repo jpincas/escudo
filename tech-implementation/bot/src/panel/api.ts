@@ -16,15 +16,18 @@ import type { Config } from "../config.ts";
 import type {
   Device,
   DeviceKind,
+  Incident,
+  IncidentSource,
   PanelSession,
   ResponsiblePerson,
   Store,
   VillageProfile,
 } from "../store/types.ts";
+import { InvalidCursorError } from "../store/types.ts";
 import { clearedCookie, tokenFromCookies } from "./auth.ts";
 import type { AlertService } from "../alerts.ts";
 import { DEFAULT_CATEGORY } from "../bridge/inbound.ts";
-import { formatAlert } from "../format.ts";
+import { formatAlert, resolveCategory } from "../format.ts";
 import { MSISDN, normaliseMsisdn } from "../msisdn.ts";
 
 /**
@@ -140,6 +143,66 @@ export function deviceStatus(
   return ageDays > proveWithinDays ? "overdue" : "ok";
 }
 
+// ── History (spec 2026-07-27 §6) ──
+//
+// A read over the incident log that already exists — see Incident's own doc
+// in src/store/types.ts. Not a filter, not an export: a bounded, paged view
+// for the screen, built on Store.listIncidentsPage so a page never costs a
+// whole-log read.
+
+/** Fixed, not client-controlled — there is nothing here for a village to
+ *  tune, and a client-chosen page size is the door listIncidents() being
+ *  called per-screen-load would otherwise open. */
+const HISTORY_PAGE_SIZE = 20;
+
+const ListIncidentsQuery = z.object({ cursor: z.string().optional() });
+
+/**
+ * What the History screen shows for one incident. Two different rules for
+ * two different columns, both required by spec §6.1:
+ *   - reporterName/reporterAddress/reporterKind/lat/lon/simulatedBy/
+ *     cancelledAt are carried through unchanged — these are the values
+ *     snapshotted on the incident at the time, and must not be re-derived
+ *     from today's registry (Incident's own doc explains why).
+ *   - categoryEmoji/categoryLabel are resolved against the *live* config,
+ *     because spec calls for "the configured emoji and label", not what a
+ *     stale category id said when the alert was raised.
+ */
+export interface IncidentView {
+  id: string;
+  createdAt: string;
+  source: IncidentSource;
+  categoryId: string;
+  categoryEmoji: string;
+  categoryLabel: string;
+  reporterName: string;
+  reporterAddress: string | null;
+  reporterKind: DeviceKind | null;
+  lat: number | null;
+  lon: number | null;
+  simulatedBy: string | null;
+  cancelledAt: string | null;
+}
+
+function incidentView(config: Config, incident: Incident): IncidentView {
+  const { emoji, label } = resolveCategory(config, incident.category);
+  return {
+    id: incident.id,
+    createdAt: incident.createdAt,
+    source: incident.source,
+    categoryId: incident.category,
+    categoryEmoji: emoji,
+    categoryLabel: label,
+    reporterName: incident.reporterName,
+    reporterAddress: incident.reporterAddress,
+    reporterKind: incident.reporterKind,
+    lat: incident.lat,
+    lon: incident.lon,
+    simulatedBy: incident.simulatedBy,
+    cancelledAt: incident.cancelledAt,
+  };
+}
+
 /** The session the auth middleware puts on every request below it. */
 type PanelEnv = { Variables: { session: PanelSession } };
 
@@ -192,6 +255,11 @@ export function createPanelApi(
       name: session.name,
       village: config.village.name,
       locale: config.village.locale,
+      // Both village policy, like locale above — not sensitive, and the
+      // History screen (§6) needs them to render times in the village's own
+      // clock and to say honestly how far back the log reaches.
+      timezone: config.village.timezone,
+      retentionDays: config.data.retentionDays,
     });
   });
 
@@ -253,6 +321,34 @@ export function createPanelApi(
     if (!await store.getDevice(msisdn)) return c.json({ error: m.notFound }, 404);
     await store.deleteDevice(msisdn);
     return c.body(null, 204);
+  });
+
+  // ── History (spec 2026-07-27 §6) ──
+
+  api.get("/incidents", async (c) => {
+    const parsed = ListIncidentsQuery.safeParse(
+      Object.fromEntries(new URL(c.req.url).searchParams),
+    );
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    // An absent ?cursor and an empty one mean the same thing — the first
+    // page — rather than handing an empty string down to the store as if it
+    // were a real, if peculiar, cursor value.
+    const cursor = parsed.data.cursor ? parsed.data.cursor : null;
+
+    try {
+      const page = await store.listIncidentsPage(HISTORY_PAGE_SIZE, cursor);
+      return c.json({
+        incidents: page.incidents.map((i) => incidentView(config, i)),
+        nextCursor: page.nextCursor,
+      });
+    } catch (err) {
+      // A cursor the store can't interpret — garbage, truncated, or replayed
+      // against the wrong backend — is malformed input, same as any other
+      // bad field on this API: a defined 400, never a bare 500 (review F1).
+      if (err instanceof InvalidCursorError) return c.json({ error: m.invalid }, 400);
+      throw err;
+    }
   });
 
   // ── Raising an alert as a device ──

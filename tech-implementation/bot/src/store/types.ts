@@ -61,6 +61,30 @@ export interface Incident {
   cancelledBy: string | null;
 }
 
+/** One bounded page of the incident log, newest first. See Store.listIncidentsPage. */
+export interface IncidentPage {
+  incidents: Incident[];
+  /** Pass to the next call to continue; null means this page reached the
+   *  end of the log. */
+  nextCursor: string | null;
+}
+
+/**
+ * Thrown by Store.listIncidentsPage when `cursor` cannot be interpreted at
+ * all, as opposed to a well-formed cursor that simply has nothing left
+ * behind it (which is the ordinary `nextCursor: null` case, not an error).
+ * Callers — see src/panel/api.ts — must catch this and answer a defined
+ * 400, the same way every other malformed input on this API is refused;
+ * letting it fall through to a framework's generic handler is exactly the
+ * unhandled-500 this exists to prevent.
+ */
+export class InvalidCursorError extends Error {
+  constructor() {
+    super("Invalid cursor");
+    this.name = "InvalidCursorError";
+  }
+}
+
 export interface Member {
   telegramId: string;
   displayName: string;
@@ -289,8 +313,40 @@ export interface Store {
    * or null. Backs the double-tap guard.
    */
   findOpenIncident(reporterRef: string, category: string): Promise<Incident | null>;
-  /** Newest first. Used by /export. */
+  /** Newest first. Used by /export, and nothing else — a screen must page
+   *  instead (see listIncidentsPage), so this whole-log read never grows
+   *  into how the History screen loads. */
   listIncidents(): Promise<Incident[]>;
+  /**
+   * A bounded, newest-first read for the History screen (spec 2026-07-27
+   * §6). Built on the same day-index reverse scan listIncidents() already
+   * does, but stops after `limit` rather than loading everything and
+   * slicing in memory — a screen's page size is what decides how much work
+   * a request does. `cursor` is null for the first page and otherwise
+   * exactly what the previous call returned as `nextCursor`; its shape is a
+   * backend implementation detail (KvStore and MemoryStore encode it
+   * differently) and must never be constructed by a caller, only replayed.
+   *
+   * A cursor is a *position*, not a promise that the row it names still
+   * exists — one naming an incident retention has since deleted must still
+   * resume cleanly from that point, exactly as a real page boundary would.
+   * A cursor that cannot be interpreted at all — garbage, truncated, or one
+   * shaped for the other backend — is a different case and rejected:
+   * rejects with InvalidCursorError rather than quietly resetting to page
+   * one, which would hand back the top of the log with no signal that
+   * anything was wrong.
+   *
+   * The invariant every backend must honour: listIncidentsPage either
+   * returns a page continuing from that position, or throws
+   * InvalidCursorError. It must never silently restart from the beginning.
+   * That does NOT mean both backends throw on identical inputs — KvStore's
+   * cursor is Deno KV's own opaque list cursor and can legitimately decode a
+   * string MemoryStore, which only recognises cursors it tagged itself, has
+   * no way to recognise (and vice versa). Either answer is fine as long as
+   * it isn't a silent restart; see tests/store_test.ts for the class of
+   * inputs this must hold for.
+   */
+  listIncidentsPage(limit: number, cursor: string | null): Promise<IncidentPage>;
   /** Deletes incidents created strictly before `cutoff` (ISO 8601). Returns the count. */
   purgeIncidentsBefore(cutoff: string): Promise<number>;
 

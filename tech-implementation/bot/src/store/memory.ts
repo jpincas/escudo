@@ -10,6 +10,8 @@ import {
   emptyVillageProfile,
   type InboxEntry,
   type Incident,
+  type IncidentPage,
+  InvalidCursorError,
   type Member,
   migrateDevice,
   type PanelCode,
@@ -17,6 +19,33 @@ import {
   type Store,
   type VillageProfile,
 } from "./types.ts";
+
+// A cursor MemoryStore can trust is one it issued itself — not merely a
+// string shaped like an incident id. An earlier version accepted anything
+// matching a loose id-shape regex, which let a caller-invented string that
+// happened to sort above every real id (e.g. "zzz-fff") silently return page
+// one with a fresh-looking nextCursor: indistinguishable from an actual first
+// page, with no signal anything was wrong (review finding, 2026-07-28).
+//
+// Tagging every cursor this store hands out closes that: anything without
+// the tag was never issued here and is rejected outright. The tagged part is
+// still just the id of the last row already returned — comparison happens on
+// that untagged id, preserving the tolerance for a cursor naming a
+// since-purged incident (see listIncidentsPage's own comment).
+const MEMORY_CURSOR_PREFIX = "mc:";
+
+/** Encodes a position in the log — the id of the last row already returned —
+ *  as an opaque MemoryStore cursor. */
+function encodeCursor(id: string): string {
+  return `${MEMORY_CURSOR_PREFIX}${id}`;
+}
+
+/** The inverse of encodeCursor. Throws InvalidCursorError for anything this
+ *  store could not have issued, tagged or not. */
+function decodeCursor(cursor: string): string {
+  if (!cursor.startsWith(MEMORY_CURSOR_PREFIX)) throw new InvalidCursorError();
+  return cursor.slice(MEMORY_CURSOR_PREFIX.length);
+}
 
 interface RateLimitWindow {
   count: number;
@@ -56,6 +85,30 @@ export class MemoryStore implements Store {
     return [...this.incidents.values()]
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .map((i) => ({ ...i }));
+  }
+
+  // Mirrors KvStore's *behaviour*, not its cursor's bytes: KvStore's cursor is
+  // Deno KV's own opaque list cursor, this one is a tagged wrapper around the
+  // id of the last incident already handed back. Either way a caller only
+  // ever replays what it was given, so the difference is invisible from
+  // outside this file — see bumpRateLimit above for the same "same contract,
+  // different plumbing" idea.
+  async listIncidentsPage(limit: number, cursor: string | null): Promise<IncidentPage> {
+    const position = cursor === null ? null : decodeCursor(cursor);
+
+    const sorted = [...this.incidents.values()].sort((a, b) => (a.id < b.id ? 1 : -1));
+    // A cursor is a *position* — everything strictly older than it — not a
+    // promise that the incident it names still exists. Comparing ids rather
+    // than requiring an exact match (the previous version's bug) means a
+    // cursor naming a row retention has since purged still resumes cleanly,
+    // the same tolerance KvStore's real cursor has for a deleted boundary key.
+    const remaining = position !== null ? sorted.filter((i) => i.id < position) : sorted;
+    const page = remaining.slice(0, limit);
+    const hasMore = remaining.length > limit;
+    return {
+      incidents: page.map((i) => ({ ...i })),
+      nextCursor: hasMore ? encodeCursor(page[page.length - 1].id) : null,
+    };
   }
 
   async purgeIncidentsBefore(cutoff: string): Promise<number> {

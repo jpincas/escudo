@@ -32,11 +32,6 @@ export const en: Strings = {
       body: "Numbers that have called Escudo without being registered will " +
         "appear here, ready to register as a device. Not built yet.",
     },
-    history: {
-      heading: "History",
-      body: "What has actually happened in the village will be listed here: " +
-        "every alert, who raised it and when. Not built yet.",
-    },
   },
 
   devices: {
@@ -140,5 +135,37 @@ export const en: Strings = {
     save: "Save",
     saving: "Saving…",
     saved: "Saved.",
+  },
+
+  history: {
+    heading: "History",
+    intro: "This history covers the last {days} days. It is not a " +
+      "permanent archive — anything older than that is deleted " +
+      "automatically, by design and by law.",
+    empty: {
+      heading: "No incidents recorded",
+      body: "When an alert happens — from Telegram or from a device — it " +
+        "will appear here.",
+    },
+    columns: {
+      when: "When",
+      category: "Category",
+      source: "Source",
+      who: "Who / where",
+      location: "Location",
+      drill: "Drill",
+      cancelled: "Cancelled",
+    },
+    source: {
+      telegram: "Telegram",
+      device: "Device",
+    },
+    locationLink: "View location",
+    drillBy: "Drill — {name}",
+    cancelledAt: "Cancelled · {when}",
+    pagination: {
+      prev: "Previous",
+      next: "Next",
+    },
   },
 };

@@ -2,7 +2,15 @@
 // functions rather than calling fetch directly, so the error contract
 // ({error: string} on any non-2xx) is honoured in exactly one spot.
 
-import type { Device, DeviceEdit, Me, NewDevice, VillageProfile, VillageProfileWrite } from "./types.ts";
+import type {
+  Device,
+  DeviceEdit,
+  IncidentPage,
+  Me,
+  NewDevice,
+  VillageProfile,
+  VillageProfileWrite,
+} from "./types.ts";
 import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
 
 /**
@@ -150,4 +158,15 @@ export async function saveVillageProfile(body: VillageProfileWrite): Promise<Vil
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+// ── History (spec 2026-07-27 §6) ──
+//
+// A bounded, newest-first page — never the whole log. There is no
+// listAllIncidents() here on purpose: the export endpoint that needs the
+// whole log is a Telegram command (/export), not something this SPA calls.
+
+export async function fetchIncidents(cursor: string | null = null): Promise<IncidentPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<IncidentPage>(`/api/incidents${query}`);
 }

@@ -339,6 +339,81 @@ button.button--danger-text:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* ── History ───────────────────────────────────────────────────────── */
+
+.history-screen__intro {
+  color: #55534c;
+  max-width: 640px;
+}
+
+.incident-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.incident-table th,
+.incident-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.incident-table th {
+  background: var(--verde);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.incident-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.incident-table tbody tr:hover {
+  background: #f1efe9;
+}
+
+.incident-table__detail {
+  color: #77756c;
+  font-size: 12px;
+}
+
+.incident-table__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Ámbar, like the inbox badge: a drill is something to note, not an alarm. */
+.incident-table__badge--drill {
+  background: #fbf1de;
+  color: #8a5c10;
+}
+
+/* Neutral: a cancellation is a fact about what happened, not itself a danger
+   signal — rojo-alarma stays reserved for genuine alarm/danger semantics. */
+.incident-table__badge--cancelled {
+  background: #f1efe9;
+  color: #55534c;
+}
+
+.history-screen__pagination {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 /* ── Status badge ──────────────────────────────────────────────────── */
 
 .status-badge {

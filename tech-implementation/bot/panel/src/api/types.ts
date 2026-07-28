@@ -9,6 +9,12 @@ export interface Me {
   name: string;
   village: string;
   locale: Locale;
+  /** IANA timezone, e.g. "Europe/Madrid" — village policy, not the browser's
+   *  own. The History screen renders every timestamp in it. */
+  timezone: string;
+  /** Days the incident log is kept before retention deletes it — shown on
+   *  the History screen so "not a permanent archive" is a fact, not a guess. */
+  retentionDays: number;
 }
 
 export type DeviceKind = "base" | "wearable" | "phone" | "alarm" | "other";
@@ -75,4 +81,44 @@ export interface VillageProfileWrite {
   photoUrl: string;
   introText: string;
   responsiblePeople: ResponsiblePerson[];
+}
+
+// ── History (spec 2026-07-27 §6) ──
+
+export type IncidentSource = "telegram" | "device";
+
+/**
+ * One row of the History screen, as GET /api/incidents returns it. Two
+ * different rules for two different fields (mirrors the backend's own
+ * IncidentView doc in src/panel/api.ts): reporterName/reporterAddress/
+ * reporterKind/lat/lon/simulatedBy/cancelledAt are the values snapshotted on
+ * the incident at the time — the view must show what the alert said then,
+ * not what the registry says now — while categoryEmoji/categoryLabel are
+ * resolved against the deployment's *current* configured categories.
+ */
+export interface Incident {
+  id: string;
+  /** ISO 8601 UTC — rendered in the village timezone, not the browser's. */
+  createdAt: string;
+  source: IncidentSource;
+  categoryId: string;
+  categoryEmoji: string;
+  categoryLabel: string;
+  reporterName: string;
+  reporterAddress: string | null;
+  reporterKind: DeviceKind | null;
+  lat: number | null;
+  lon: number | null;
+  /** Set when an admin raised this from the panel as a drill; who ran it. */
+  simulatedBy: string | null;
+  /** ISO 8601 UTC, or null if this alert is still active. */
+  cancelledAt: string | null;
+}
+
+/** Response shape of GET /api/incidents. */
+export interface IncidentPage {
+  incidents: Incident[];
+  /** Opaque; pass back as `?cursor=` to fetch the next page. Null means this
+   *  page reached the end of the log. */
+  nextCursor: string | null;
 }

@@ -33,11 +33,6 @@ export const es: Strings = {
         "registrados, listos para darlos de alta como dispositivo. Todavía no " +
         "está construido.",
     },
-    history: {
-      heading: "Historial",
-      body: "Aquí se podrá consultar lo que ha pasado en el pueblo: cada " +
-        "alerta, quién la dio y cuándo. Todavía no está construido.",
-    },
   },
 
   devices: {
@@ -141,5 +136,37 @@ export const es: Strings = {
     save: "Guardar",
     saving: "Guardando…",
     saved: "Guardado.",
+  },
+
+  history: {
+    heading: "Historial",
+    intro: "Este historial cubre los últimos {days} días. No es un archivo " +
+      "permanente: lo que supera ese plazo se elimina automáticamente, por " +
+      "diseño y por ley.",
+    empty: {
+      heading: "No hay incidencias registradas",
+      body: "Cuando se produzca una alerta —desde Telegram o desde un " +
+        "dispositivo— aparecerá aquí.",
+    },
+    columns: {
+      when: "Cuándo",
+      category: "Categoría",
+      source: "Origen",
+      who: "Quién / dónde",
+      location: "Ubicación",
+      drill: "Simulacro",
+      cancelled: "Cancelada",
+    },
+    source: {
+      telegram: "Telegram",
+      device: "Dispositivo",
+    },
+    locationLink: "Ver ubicación",
+    drillBy: "Simulacro — {name}",
+    cancelledAt: "Cancelada · {when}",
+    pagination: {
+      prev: "Anterior",
+      next: "Siguiente",
+    },
   },
 };
