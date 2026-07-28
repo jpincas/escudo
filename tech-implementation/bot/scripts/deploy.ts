@@ -212,10 +212,29 @@ async function expect(path: string, check: (res: Response) => Promise<boolean>, 
 }
 
 await expect("/health", async (r) => r.ok && (await r.text()) === "ok", "/health answers ok");
+// The welcome page: the deployment's public face, and the only surface a
+// villager ever sees. It renders from config.yaml alone, so it answers even
+// with an empty KV.
+await expect(
+  "/",
+  async (r) => r.ok && (await r.text()).includes("<h1"),
+  "/ serves the welcome page",
+);
+// Bare /panel is the login page — server-rendered, a plain form, and
+// deliberately scriptless. Checking for "<script" here would pass only while
+// /panel served the SPA shell, which it stopped doing when the magic link was
+// replaced by a typed code.
 await expect(
   "/panel",
+  async (r) => r.ok && (await r.text()).includes('action="/panel"'),
+  "/panel serves the login page",
+);
+// The SPA itself lives below /panel, and reaching it proves the built assets
+// shipped — which is what this check was always really for.
+await expect(
+  "/panel/devices",
   async (r) => r.ok && (await r.text()).includes("<script"),
-  "/panel serves the built SPA",
+  "/panel/devices serves the built SPA",
 );
 
 console.log(`\n✔ Deployed and verified: ${prodUrl}`);
