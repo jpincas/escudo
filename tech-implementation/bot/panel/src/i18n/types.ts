@@ -12,10 +12,13 @@ export interface Strings {
   /** Browser tab title. */
   appTitle: string;
 
-  /** Shown on a 401 from either session endpoint — there is no login form. */
+  /** Shown on a 401 from the session route — there is no login form here
+   *  (spec 2026-07-27 §5); the code goes to the public login page instead. */
   signedOut: {
     heading: string;
     body: string;
+    /** Link back to the public login page (bare /panel). */
+    loginLink: string;
   };
 
   loading: string;

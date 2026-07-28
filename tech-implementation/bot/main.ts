@@ -27,8 +27,14 @@ import { createZadarmaBridge } from "./src/bridge/zadarma.ts";
 import { loadConfig } from "./src/config.ts";
 import { createPanelApi } from "./src/panel/api.ts";
 import { createWelcomeApi } from "./src/web/welcome.ts";
+import { handleLoginSubmit, renderLoginPage } from "./src/web/login.ts";
 import { KvStore } from "./src/store/kv.ts";
-import { issueLink } from "./src/panel/auth.ts";
+import {
+  formatCodeForDisplay,
+  issueCode,
+  sessionCookie,
+  tokenFromCookies,
+} from "./src/panel/auth.ts";
 import { createBot, publishCommands } from "./src/telegram/bot.ts";
 import { ConsoleNotifier } from "./src/telegram/console.ts";
 import { TelegramNotifier } from "./src/telegram/notifier.ts";
@@ -50,15 +56,17 @@ if (offline) {
       "print to this terminal. This is dev mode for the panel.",
   );
 
-  // With no bot there is no /panel command to mint a login link, so the panel
-  // would be unreachable past its login screen. Mint one here and print it: the
-  // SPA spends a ?t= token exactly as it would one from Telegram, and the
-  // resulting session persists in KV — so this is a once-per-checkout step, not
-  // once per restart. Guarded by `offline`; it never runs against a real village.
-  const link = await issueLink(store, "dev", "Dev");
+  // With no bot there is no /panel command to mint a login code, so the panel
+  // would be unreachable past its login page. Mint one here and print it: the
+  // login page redeems it exactly as it would one sent over Telegram, and the
+  // resulting session persists in KV — so this is a once-per-checkout step,
+  // not once per restart. Guarded by `offline`; it never runs against a real
+  // village, since a real deployment always has a bot to ask instead.
+  const issued = await issueCode(store, "dev", "Dev");
   const base = config.runtime.publicUrl ?? `http://localhost:${config.runtime.port}`;
-  console.log(`\n🔑 Open the panel (valid 10 min, session then lasts 30 days):`);
-  console.log(`   ${base}/panel?t=${link.token}\n`);
+  console.log(`\n🔑 Admin login code (valid 10 min, session then lasts 30 days):`);
+  console.log(`   ${formatCodeForDisplay(issued.code)}`);
+  console.log(`   Enter it at ${base}/panel\n`);
 } else {
   bot = createBot(config, store);
 
@@ -187,6 +195,45 @@ web.route(
 // runs after the alert path above has declined the request — nothing about
 // where the webhook, the bridge and /health are matched, above, changes.
 web.route("/", createWelcomeApi(config, store));
+// The public login page (§5, spec 2026-07-27). GET /panel serves it whenever
+// there is no valid session — in place of the SPA's own signed-out
+// explainer, which is desktop-only by construction and this page must not
+// be. A valid session calls next(), falling straight through to the static
+// block below, unchanged. POST /panel is what the page's own <form> submits
+// to; success sets the same session cookie the SPA has always read and
+// replaces any session already held (spec 5.3), rather than layering a
+// second one alongside it. The code itself never appears in this or any
+// other URL — only a bare `?error=1` flag does, on failure, which is why
+// GET reads that instead of the POST body.
+web.get("/panel", async (c, next) => {
+  const token = tokenFromCookies(c.req.header("cookie") ?? null);
+  const session = token ? await store.getSession(token) : null;
+  if (session) return await next();
+  return c.html(renderLoginPage(config, { failed: c.req.query("error") === "1" }));
+});
+web.post("/panel", async (c) => {
+  let body: Record<string, string | File> = {};
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    // Malformed form submission — falls through to the ordinary "code is
+    // missing" case below, indistinguishable from any other wrong guess.
+  }
+  const code = typeof body.code === "string" ? body.code : "";
+  const existingToken = tokenFromCookies(c.req.header("cookie") ?? null);
+
+  // No caller-derived key here — see src/web/login.ts's header for why the
+  // rate limit this calls into is one fixed bucket for the whole
+  // deployment, not one keyed on x-forwarded-for.
+  const session = await handleLoginSubmit(store, {
+    code,
+    existingSessionToken: existingToken,
+  });
+  if (!session) return c.redirect("/panel?error=1", 303);
+
+  c.header("set-cookie", sessionCookie(session.token, new URL(c.req.url).protocol === "https:"));
+  return c.redirect("/panel", 303);
+});
 // Anchor the SPA's files to this module's own directory, not the process CWD.
 // hono's serveStatic resolves a relative `root` against Deno.cwd(), which is not
 // guaranteed to be the app directory on Deploy — and a wrong CWD is a silent
@@ -201,10 +248,13 @@ web.use(
   }),
 );
 // Bare /panel, and anything below it that isn't a real file, fall through to
-// index.html: the SPA boots and works out what to show, including exchanging a
-// ?t= link or resolving a client-side route like /panel/history (§2's shell).
-// serveStatic calls next() when it finds nothing, so these run only for paths
-// the middleware above couldn't satisfy.
+// index.html: the SPA boots and works out what to show — resolving a
+// client-side route like /panel/history (§2's shell), or (with no session)
+// showing its own plain signed-out explainer, which now points back at this
+// same login page. A signed-out request for *bare* /panel never reaches
+// this far, though: the handler above already answered it. serveStatic
+// calls next() when it finds nothing, so these run only for paths the
+// middleware above couldn't satisfy.
 //
 // `root: "/"` is required here, and easy to lose: hono's serveStatic joins
 // `path` against `root` (default "./") with node's path.join, which silently

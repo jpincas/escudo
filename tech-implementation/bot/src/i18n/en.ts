@@ -76,10 +76,8 @@ export const en: Strings = {
     menuExport: "Download the incident log",
     menuChatId: "Show this chat's id",
     menuPanel: "Open the admin panel",
-    panelLink:
-      "Red Escudo admin panel:\n\n{url}\n\nThe link expires in 10 minutes and works once. Don't forward it to anyone: whoever opens it is signed in as you.",
-    panelNoUrl:
-      "⚠️ I don't know what address I'm published at, so I can't give you a link.\n\nSet the ESCUDO_PUBLIC_URL environment variable to the bot's address (for example https://escudo-bot.example.deno.net) and send /panel again.",
+    panelCode:
+      'Red Escudo admin panel login code: {code}\n\nOpen the welcome page, tap "Admin login", and type it in. It expires in 10 minutes and works once. Don\'t share it: whoever enters it signs in as you.',
     testSent: "Drill sent to the group.",
     pinned: "Done. The message with the alert buttons is now pinned.",
     pinFailed:
@@ -104,5 +102,16 @@ export const en: Strings = {
       "Escudo supplements the emergency services — it never replaces them. In an emergency, call first:",
     photoAlt: "Photo of the village",
     responsiblePeopleHeading: "Responsible people",
+  },
+
+  login: {
+    heading: "Admin login",
+    instructions:
+      "Message /panel to the Escudo bot on Telegram. It will reply with a 9-digit code — type it in below.",
+    codeLabel: "Code",
+    codeHelp: "The 9-digit code the bot sent you, for example 123 456 789.",
+    submit: "Sign in",
+    error: "That code is not valid. Ask the bot for another with /panel.",
+    backToWelcome: "Back",
   },
 };

@@ -1,10 +1,13 @@
-// Resolves who's signed in, if anyone, exactly once on mount — the only
-// entry points are a Telegram magic link (?t=…) or an existing cookie.
-// There is deliberately no login form: a village volunteer proves who they
-// are in Telegram, not here.
+// Resolves who's signed in, if anyone, on mount by asking the session
+// endpoint — the cookie is the only credential the SPA ever reads. There is
+// deliberately no login form and no ?t= token exchange here (spec
+// 2026-07-27 §5): a village volunteer proves who they are to the bot, then
+// types the code it sends into the public login page, which is
+// server-rendered and lives outside this app entirely — see
+// src/web/login.ts. This hook only ever reads the session that results.
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, exchangeToken, fetchSession, logout as apiLogout } from "../api/client.ts";
+import { ApiError, fetchSession, logout as apiLogout } from "../api/client.ts";
 import type { Me } from "../api/types.ts";
 import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
 
@@ -24,20 +27,8 @@ export function useSession(): {
     let cancelled = false;
 
     async function resolve() {
-      const url = new URL(window.location.href);
-      const token = url.searchParams.get("t");
-
       try {
-        const result = token ? await exchangeToken(token) : await fetchSession();
-
-        // Strip the one-time token immediately, whether it worked or not —
-        // it must never sit in the URL bar, browser history or a bookmark,
-        // since anyone who reuses it could ride in on someone else's session.
-        if (token) {
-          url.searchParams.delete("t");
-          window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-        }
-
+        const result = await fetchSession();
         if (cancelled) return;
         setState(
           result.signedIn
@@ -47,7 +38,7 @@ export function useSession(): {
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ApiError ? err.message : String(err);
-        // A locale on ApiError only ever comes from a 401 on a session
+        // A locale on ApiError only ever comes from a 401 on the session
         // route (see client.ts) — anything else reaching here is a genuine
         // failure (network down, a 500, bad JSON) with no village to ask, so
         // the fallback is the only honest answer.

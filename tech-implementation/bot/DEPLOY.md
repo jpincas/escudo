@@ -206,13 +206,17 @@ answer for a community that needs its data kept in-country.
 
 ## The admin panel
 
-`/panel` is a React SPA served by this same app; `/api/*` is its JSON API. There is no login form
-and no user table — an admin DMs the bot `/panel`, and the bot replies with a one-time link that
-opens a session. Authority is read live from Telegram (`isGroupAdmin`), so **removing someone as a
-group admin removes their panel access**; there is no second list to remember.
+`/panel` is a React SPA served by this same app; `/api/*` is its JSON API. There is no "request a
+code" form and no user table — an admin DMs the bot `/panel`, and the bot replies with a one-time
+9-digit code. The admin opens `/panel` (which serves a server-rendered login page whenever there is
+no session) and types the code in. Authority is read live from Telegram (`isGroupAdmin`), so
+**removing someone as a group admin removes their panel access**; there is no second list to
+remember.
 
-The link expires in ten minutes and works exactly once, which means it is safe to send over Telegram
-and unsafe to forward. Sessions last 30 days.
+The code expires in ten minutes and works exactly once, which means it is safe to send over Telegram
+and unsafe to share. Guessing is bounded by the keyspace (10^9) and a global rate limit on the login
+endpoint, not by anything tied to one code — see `src/panel/auth.ts` and `src/web/login.ts` for the
+arithmetic. Sessions last 30 days.
 
 ## Phase 2 (device layer)
 

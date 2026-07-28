@@ -9,7 +9,8 @@ export const es: Strings = {
   signedOut: {
     heading: "Sesión cerrada",
     body: "Para entrar al panel, escribe /panel al bot de Escudo en Telegram. " +
-      "Te enviará un enlace nuevo de acceso.",
+      "Te enviará un código de 9 dígitos: escríbelo en la página de acceso.",
+    loginLink: "Ir a la página de acceso",
   },
 
   loading: "Cargando…",

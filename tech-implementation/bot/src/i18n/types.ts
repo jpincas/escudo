@@ -93,10 +93,9 @@ export interface Strings {
     menuExport: string;
     menuChatId: string;
     menuPanel: string;
-    /** The magic link into the admin panel. {url} */
-    panelLink: string;
-    /** Sent instead when the bot doesn't know its own public address. */
-    panelNoUrl: string;
+    /** The one-time login code (spec 2026-07-27 §5), and nothing else — no
+     *  URL. {code} */
+    panelCode: string;
     /** Confirmation to an admin who ran /test from outside the group. */
     testSent: string;
     pinned: string;
@@ -139,5 +138,29 @@ export interface Strings {
     photoAlt: string;
     /** Heading over the list of responsible people. */
     responsiblePeopleHeading: string;
+  };
+
+  /**
+   * The public login page (spec 2026-07-27 §5) — where an admin types the
+   * code /panel just sent them. Server-rendered and mobile-readable, like
+   * `welcome` above and for the same reason: the code lands on a phone, even
+   * though the ordinary flow types it into a computer.
+   */
+  login: {
+    /** <title> and page heading. */
+    heading: string;
+    /** Says plainly where the code comes from. There is no "request a code"
+     *  form on this page, so this is the only instruction it gives. */
+    instructions: string;
+    codeLabel: string;
+    /** Help text under the input. */
+    codeHelp: string;
+    submit: string;
+    /** Shown on every failure, worded identically regardless of cause
+     *  (spec 5.3): unknown, expired, used, superseded, or rate-limited. The
+     *  caller must learn nothing about which one it was. */
+    error: string;
+    /** Link back to the welcome page. */
+    backToWelcome: string;
   };
 }

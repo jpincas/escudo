@@ -9,7 +9,8 @@ export const en: Strings = {
   signedOut: {
     heading: "Signed out",
     body: "To open the panel, message /panel to the Escudo bot on Telegram. " +
-      "It will send you a new login link.",
+      "It will send you a 9-digit code — enter it on the login page.",
+    loginLink: "Go to the login page",
   },
 
   loading: "Loading…",

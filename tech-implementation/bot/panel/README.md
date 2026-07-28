@@ -4,8 +4,9 @@ The admin panel for the village bot: a sidebar of sections — Devices, Inbox, H
 coordinator to run the alert system day to day. A React SPA served at `/panel` by the bot's own Deno
 app; it holds no state of its own beyond the session cookie the API sets.
 
-There is no login form. The only way in is a magic link the bot sends in Telegram (`/panel`), which
-this app exchanges for a session cookie on first load.
+There is no login form in this app. The only way in is a one-time code the bot sends in Telegram
+(`/panel`), typed into the public login page the bot's own Deno app serves at bare `/panel` when
+there is no session — that page lives in `src/web/login.ts` on the bot side, not here.
 
 ## Develop
 
@@ -22,8 +23,10 @@ first:
 deno task dev
 ```
 
-Then open `http://localhost:5173/panel/?t=<a token from the bot>`, or just
-`http://localhost:5173/panel/` if a session cookie is already set.
+The Vite dev server only serves this SPA, not the login page — that's server-rendered by the bot's
+own app at :8000. Sign in there (`http://localhost:8000/panel`, using a code from `/panel` in
+Telegram or from `deno run mint-dev-link.ts` in offline dev mode), then open
+`http://localhost:5173/panel/`: it shares the same cookie, since both answer on `localhost`.
 
 ## Build
 
@@ -53,7 +56,7 @@ spot in the village's language — delete a key from one locale and `deno task b
 
 The active locale is provided by `src/i18n/context.tsx`'s `LocaleProvider`, mounted by `App.tsx` as
 soon as a locale is known — from `Me.locale` once signed in, or from the `locale` field the backend
-now puts on a 401 from either session route, for the signed-out/error screens that have never had a
+puts on a 401 from the session route, for the signed-out/error screens that have never had a
 session to read one from (see `src/api/client.ts`'s `SessionResult`). `useStrings()` and `useLocale()`
 read it from anywhere below.
 

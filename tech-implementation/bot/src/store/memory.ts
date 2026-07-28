@@ -12,11 +12,17 @@ import {
   type Incident,
   type Member,
   migrateDevice,
-  type PanelLink,
+  type PanelCode,
   type PanelSession,
   type Store,
   type VillageProfile,
 } from "./types.ts";
+
+interface RateLimitWindow {
+  count: number;
+  /** ISO 8601, UTC. */
+  resetAt: string;
+}
 
 export class MemoryStore implements Store {
   private incidents = new Map<string, Incident>();
@@ -24,7 +30,9 @@ export class MemoryStore implements Store {
   private devices = new Map<string, Device>();
   private inbox = new Map<string, InboxEntry>();
   private villageProfile: VillageProfile | null = null;
-  private panelLinks = new Map<string, PanelLink>();
+  private panelCodes = new Map<string, PanelCode>();
+  private panelCodeByAdmin = new Map<string, string>();
+  private rateLimits = new Map<string, RateLimitWindow>();
   private sessions = new Map<string, PanelSession>();
   private meta = new Map<string, string>();
 
@@ -151,17 +159,45 @@ export class MemoryStore implements Store {
     };
   }
 
-  async putPanelLink(link: PanelLink): Promise<void> {
-    this.panelLinks.set(link.token, { ...link });
+  async putPanelCode(entry: PanelCode): Promise<void> {
+    // Supersede any code already outstanding for this admin (A6) — mirrors
+    // KvStore doing both in one write.
+    const existing = this.panelCodeByAdmin.get(entry.telegramId);
+    if (existing) this.panelCodes.delete(existing);
+
+    this.panelCodes.set(entry.code, { ...entry });
+    this.panelCodeByAdmin.set(entry.telegramId, entry.code);
   }
 
-  async takePanelLink(token: string): Promise<PanelLink | null> {
-    const link = this.panelLinks.get(token);
-    // Deleted whether or not it had expired: a consumed token is spent either
-    // way, matching KvStore.
-    this.panelLinks.delete(token);
-    if (!link) return null;
-    return new Date(link.expiresAt) > new Date() ? { ...link } : null;
+  async takePanelCode(code: string, now: Date): Promise<PanelCode | null> {
+    const entry = this.panelCodes.get(code);
+    // Deleted whether or not it had expired: a consumed code is spent either
+    // way, matching KvStore. The admin pointer is left alone, same reasoning
+    // as KvStore's takePanelCode — it may already point at a newer code.
+    this.panelCodes.delete(code);
+    if (!entry) return null;
+    return new Date(entry.expiresAt) > now ? { ...entry } : null;
+  }
+
+  // No compare-and-swap needed here: every await above is a full statement
+  // apart, and JS never interleaves two synchronous sections of different
+  // async calls on one thread, so a read here and the write below it can
+  // never be split by a concurrent bumpRateLimit() the way they can against
+  // real KV. This still mirrors KvStore's *behaviour* exactly; it just gets
+  // there without needing KvStore's retry loop.
+  async bumpRateLimit(key: string, windowMs: number, now: Date): Promise<number> {
+    const nowMs = now.getTime();
+    const existing = this.rateLimits.get(key);
+
+    if (!existing || new Date(existing.resetAt).getTime() <= nowMs) {
+      const resetAt = new Date(nowMs + windowMs).toISOString();
+      this.rateLimits.set(key, { count: 1, resetAt });
+      return 1;
+    }
+
+    const count = existing.count + 1;
+    this.rateLimits.set(key, { count, resetAt: existing.resetAt });
+    return count;
   }
 
   async putSession(session: PanelSession): Promise<void> {

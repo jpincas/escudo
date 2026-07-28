@@ -1,12 +1,15 @@
 // The panel API, end to end, without a socket or Telegram.
 //
 // Hono apps are just fetch handlers, so the real router, the real middleware
-// and the real store run here — only the network is missing. These assert the
-// two rules that matter most: nothing is readable without a session, and a
-// magic link opens exactly one.
+// and the real store run here — only the network is missing. The rule that
+// matters most: nothing is readable without a session. (Code redemption
+// itself — the exactly-once, expiry, supersession and attempt-cap behaviour
+// — is a plain HTML form POST outside /api now, at POST /panel; see
+// tests/panel_login_test.ts.)
 
 import { assertEquals } from "@std/assert";
 import { createPanelApi } from "../src/panel/api.ts";
+import { SESSION_COOKIE } from "../src/panel/auth.ts";
 import { MemoryStore } from "../src/store/memory.ts";
 import type { Store } from "../src/store/types.ts";
 import { makeConfig } from "./helpers.ts";
@@ -18,27 +21,21 @@ function setup(): { api: ReturnType<typeof createPanelApi>; store: Store } {
   return { api: createPanelApi(makeConfig(), store), store };
 }
 
-/** Mint a link the way the bot does, then spend it the way the SPA does. */
-async function signIn(
-  api: ReturnType<typeof createPanelApi>,
-  store: Store,
-): Promise<string> {
-  await store.putPanelLink({
-    token: "link-token",
+/**
+ * Create a session directly in the store — what a successful code
+ * redemption at POST /panel would leave behind — without exercising that
+ * endpoint here (it isn't part of this API; see panel_login_test.ts).
+ */
+async function signIn(store: Store): Promise<string> {
+  const token = "test-session-token";
+  await store.putSession({
+    token,
     telegramId: "42",
     name: "Jon",
+    createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 600_000).toISOString(),
   });
-
-  const res = await api.request(`${BASE}/session/exchange`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: "link-token" }),
-  });
-  assertEquals(res.status, 200);
-
-  const cookie = res.headers.get("set-cookie") ?? "";
-  return cookie.split(";")[0];
+  return `${SESSION_COOKIE}=${token}`;
 }
 
 Deno.test("everything is refused without a session", async () => {
@@ -62,42 +59,34 @@ Deno.test("everything is refused without a session", async () => {
 // The panel SPA has no session yet at this point, so it can't read a locale
 // off `Me` — this is the only place it can come from (panel §2.3). Not
 // sensitive: it's the same locale the welcome page is about to show anyone.
-Deno.test("a 401 on either session route carries the village's locale", async () => {
+Deno.test("a 401 on the session route carries the village's locale", async () => {
   const { api } = setup();
 
   const noSession = await api.request(`${BASE}/session`);
   assertEquals(noSession.status, 401);
   assertEquals((await noSession.json()).locale, "es");
-
-  const badExchange = await api.request(`${BASE}/session/exchange`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: "not-a-real-token" }),
-  });
-  assertEquals(badExchange.status, 401);
-  assertEquals((await badExchange.json()).locale, "es");
 });
 
-Deno.test("a magic link signs in once and only once", async () => {
-  const { api, store } = setup();
-  const cookie = await signIn(api, store);
-
-  const me = await api.request(`${BASE}/session`, { headers: { cookie } });
-  assertEquals(me.status, 200);
-  assertEquals((await me.json()).name, "Jon");
-
-  // The same link again is dead — forwarded or re-pasted, it opens nothing.
-  const replay = await api.request(`${BASE}/session/exchange`, {
+// Spec 2026-07-27 §5: "the token-exchange endpoint that backs it is replaced
+// by code redemption" — replaced, not left running alongside. Code
+// redemption's own exactly-once, expiry, supersession and attempt-cap
+// behaviour lives outside this API, at POST /panel; see
+// tests/panel_login_test.ts.
+Deno.test("the removed magic-link exchange route is gone", async () => {
+  const { api } = setup();
+  const res = await api.request(`${BASE}/session/exchange`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: "link-token" }),
+    body: JSON.stringify({ token: "anything" }),
   });
-  assertEquals(replay.status, 401);
+  // Falls through to the ordinary session gate, same as any other unknown
+  // path under /api without a cookie.
+  assertEquals(res.status, 401);
 });
 
 Deno.test("a device can be registered, edited and removed", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
   const json = { "content-type": "application/json", cookie };
 
   const created = await api.request(`${BASE}/devices`, {
@@ -152,7 +141,7 @@ Deno.test("a device can be registered, edited and removed", async () => {
 
 Deno.test("a malformed phone number is refused with a usable message", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/devices`, {
     method: "POST",
@@ -182,7 +171,7 @@ Deno.test("the village profile route is refused without a session", async () => 
 
 Deno.test("a brand-new deployment's profile reads as empty, not an error", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, { headers: { cookie } });
   assertEquals(res.status, 200);
@@ -196,7 +185,7 @@ Deno.test("a brand-new deployment's profile reads as empty, not an error", async
 
 Deno.test("a full profile can be saved and read back, phone number normalised", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
   const json = { "content-type": "application/json", cookie };
 
   const saved = await api.request(`${BASE}/village-profile`, {
@@ -223,7 +212,7 @@ Deno.test("a full profile can be saved and read back, phone number normalised", 
 
 Deno.test("every field is optional — an all-empty profile is accepted", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -246,7 +235,7 @@ Deno.test("every field is optional — an all-empty profile is accepted", async 
 
 Deno.test("a malformed Escudo phone number is refused, naming the field, and nothing is stored", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -272,7 +261,7 @@ Deno.test("a malformed Escudo phone number is refused, naming the field, and not
 
 Deno.test("a photo URL that is not https is refused, naming the field", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -291,7 +280,7 @@ Deno.test("a photo URL that is not https is refused, naming the field", async ()
 
 Deno.test("a responsible person with a blank role is refused, naming that person's field", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -317,7 +306,7 @@ Deno.test("a responsible person with a blank role is refused, naming that person
 
 Deno.test("an intro text over the length limit is refused, naming the field", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -337,7 +326,7 @@ Deno.test("an intro text over the length limit is refused, naming the field", as
 
 Deno.test("a photo URL over the length limit is refused, naming the field", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -356,7 +345,7 @@ Deno.test("a photo URL over the length limit is refused, naming the field", asyn
 
 Deno.test("a person's name or role over the length limit is refused, naming that field", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const badName = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -389,7 +378,7 @@ Deno.test("a person's name or role over the length limit is refused, naming that
 
 Deno.test("more than the maximum number of responsible people is refused, naming the list", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const tooMany = Array.from({ length: 51 }, (_, i) => ({
     name: `Persona ${i}`,
@@ -420,7 +409,7 @@ Deno.test("a store failure while saving the profile surfaces as a JSON error, no
   failing.putVillageProfile = () => Promise.reject(new Error("kv unavailable"));
 
   const api = createPanelApi(makeConfig(), failing);
-  const cookie = await signIn(api, failing);
+  const cookie = await signIn(failing);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -440,7 +429,7 @@ Deno.test("a store failure while saving the profile surfaces as a JSON error, no
 
 Deno.test("unknown top-level and per-person keys are stripped from what is stored", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   const res = await api.request(`${BASE}/village-profile`, {
     method: "PUT",
@@ -489,7 +478,7 @@ Deno.test("unknown top-level and per-person keys are stripped from what is store
 
 Deno.test("deleting a person removes them on the next read", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
   const json = { "content-type": "application/json", cookie };
 
   await api.request(`${BASE}/village-profile`, {
@@ -524,7 +513,7 @@ Deno.test("deleting a person removes them on the next read", async () => {
 
 Deno.test("signing out kills the session immediately", async () => {
   const { api, store } = setup();
-  const cookie = await signIn(api, store);
+  const cookie = await signIn(store);
 
   assertEquals(
     (await api.request(`${BASE}/session/logout`, {

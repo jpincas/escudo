@@ -244,14 +244,25 @@ export function emptyVillageProfile(): VillageProfile {
 }
 
 /**
- * A one-time link handed out over Telegram to open the admin panel.
+ * A one-time login code handed out over Telegram (spec 2026-07-27 §5) — the
+ * bot is the authentication channel: it already knows who the admins are and
+ * can already prove it, so the panel needs no passwords, no email and no
+ * user table of its own. Replaces the old magic-link `PanelLink`: the bot now
+ * sends a short digits-only code and nothing else, which the admin types
+ * into the public login page themselves.
  *
- * Short-lived and consumed on first use. The bot is the authentication channel:
- * it already knows who the admins are and can already prove it, so the panel
- * needs no passwords, no email and no user table of its own.
+ * Short-lived and consumed on first correct guess, looked up by its own
+ * value as a KV key — see Store.takePanelCode(). A wrong guess is simply a
+ * key nobody wrote, so it touches nothing: not this code, not anyone else's.
+ * That is deliberate (see the review note in src/panel/auth.ts's header): an
+ * earlier version compared a guess against every currently-live code and
+ * charged a miss against all of them, which let one guesser kill *any*
+ * admin's fresh code from anywhere on the internet, with no need to know who
+ * they were. Guessing is defended entirely by the login endpoint's rate
+ * limit now (src/web/login.ts), not by anything carried on this record.
  */
-export interface PanelLink {
-  token: string;
+export interface PanelCode {
+  code: string;
   telegramId: string;
   name: string;
   /** ISO 8601, UTC. */
@@ -326,14 +337,38 @@ export interface Store {
   /** Replaces the single row wholesale. Last write wins; no history. */
   putVillageProfile(profile: VillageProfile): Promise<void>;
 
-  // ── Panel access ──
-  putPanelLink(link: PanelLink): Promise<void>;
+  // ── Panel login codes (spec 2026-07-27 §5; replaces panel links) ──
   /**
-   * Consume a magic link: returns it and deletes it in one step, so a link
-   * works exactly once even if the URL is forwarded, logged or pasted twice.
-   * Expired links return null.
+   * Mint a code for an admin, superseding any code already outstanding for
+   * them (A6) as part of the same write — there is never a moment with two
+   * live codes for one admin.
    */
-  takePanelLink(token: string): Promise<PanelLink | null>;
+  putPanelCode(entry: PanelCode): Promise<void>;
+  /**
+   * Consume a code atomically: looks it up by its own value (a plain KV get,
+   * not a scan or a comparison — see PanelCode's own doc for why that
+   * matters), returning it and deleting it in one step so two requests
+   * racing the same correct code cannot both open a session. A code that
+   * doesn't exist — wrong, expired-and-purged, already used, or superseded
+   * — returns null, identically to a code that was never issued at all.
+   */
+  takePanelCode(code: string, now: Date): Promise<PanelCode | null>;
+
+  // ── Login rate limiting (spec 2026-07-27 §5.2) ──
+  /**
+   * Bump a fixed-window counter for `key` and return the count after
+   * bumping. Atomic under concurrency: a lost race retries against the
+   * fresh value rather than silently dropping the increment, and a caller
+   * that cannot land a write after retrying gets back a count guaranteed to
+   * read as over any real limit (fail closed, never fire-and-forget). The
+   * window is anchored to wall-clock time, not to any code's lifecycle —
+   * asking the bot for a new code does not reset it ("survives across
+   * codes"). src/web/login.ts uses one fixed key for the whole deployment,
+   * not one per caller — see its own comment for why.
+   */
+  bumpRateLimit(key: string, windowMs: number, now: Date): Promise<number>;
+
+  // ── Panel sessions ──
   putSession(session: PanelSession): Promise<void>;
   /** Expired sessions return null rather than being handed back stale. */
   getSession(token: string): Promise<PanelSession | null>;

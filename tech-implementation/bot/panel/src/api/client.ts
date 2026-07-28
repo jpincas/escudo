@@ -10,7 +10,7 @@ import { FALLBACK_LOCALE, type Locale } from "../i18n/mod.ts";
  * `{error}` string where the backend supplied one — the UI must show that
  * verbatim, never invent its own wording, since it may name the exact
  * validation problem (e.g. "msisdn already registered"). `locale` is carried
- * only by the session endpoints (see SessionResult below) — it's how a
+ * only by the session route (see SessionResult below) — it's how a
  * signed-out visitor's screen knows which language to use, since there is no
  * session yet to read a locale from. `field` is carried only by the village
  * profile's write endpoint (spec 2026-07-27 §3): which field was rejected, so
@@ -63,7 +63,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
  * one piece of the session response that isn't sensitive and is needed
  * before any session exists: which language to greet the visitor in. The
  * backend puts it on the 401 body precisely so this works (see
- * src/panel/api.ts's `MESSAGES` + the `locale` field on both 401s).
+ * src/panel/api.ts's `MESSAGES` + the `locale` field on that 401).
  */
 export type SessionResult =
   | { signedIn: true; me: Me }
@@ -76,27 +76,6 @@ export type SessionResult =
 export async function fetchSession(): Promise<SessionResult> {
   try {
     const me = await request<Me>("/api/session");
-    return { signedIn: true, me };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      return { signedIn: false, locale: err.locale ?? FALLBACK_LOCALE };
-    }
-    throw err;
-  }
-}
-
-/**
- * Trades the one-time token from the Telegram magic link for a session
- * cookie. A 401 means the token was invalid or already used — treated the
- * same as "signed out", not as a fetch failure, since the fix is the same
- * either way: go back to Telegram for a fresh link.
- */
-export async function exchangeToken(token: string): Promise<SessionResult> {
-  try {
-    const me = await request<Me>("/api/session/exchange", {
-      method: "POST",
-      body: JSON.stringify({ token }),
-    });
     return { signedIn: true, me };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {

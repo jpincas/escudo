@@ -5,8 +5,10 @@
 // or from the bridge, and nothing here is imported by src/alerts.ts. A panel
 // route failing must never be able to stop an alarm being raised.
 //
-// Every route except the link exchange requires a session cookie. Authority
-// comes from having been an admin at the moment the link was minted; see auth.ts.
+// Every route requires a session cookie. Authority comes from having been an
+// admin at the moment the login code was minted and redeemed; see auth.ts
+// and src/web/login.ts (the code redemption itself lives outside /api, at
+// POST /panel, since it's a plain browser form submission, not JSON).
 
 import { Hono } from "hono";
 import { z } from "zod";
@@ -19,7 +21,7 @@ import type {
   Store,
   VillageProfile,
 } from "../store/types.ts";
-import { clearedCookie, exchangeLink, sessionCookie, tokenFromCookies } from "./auth.ts";
+import { clearedCookie, tokenFromCookies } from "./auth.ts";
 import type { AlertService } from "../alerts.ts";
 import { DEFAULT_CATEGORY } from "../bridge/inbound.ts";
 import { formatAlert } from "../format.ts";
@@ -34,8 +36,7 @@ import { MSISDN, normaliseMsisdn } from "../msisdn.ts";
  */
 const MESSAGES = {
   es: {
-    unauthorized: "Sesión caducada. Pide un enlace nuevo al bot con /panel.",
-    badLink: "Este enlace ya se ha usado o ha caducado. Pide otro con /panel.",
+    unauthorized: "Sesión caducada. Pide un código nuevo al bot con /panel.",
     badMsisdn: "El teléfono debe estar en formato internacional, por ejemplo +34600111222.",
     duplicate: "Ese número ya está registrado.",
     notFound: "No existe ningún dispositivo con ese número.",
@@ -53,8 +54,7 @@ const MESSAGES = {
     profileWriteFailed: "No se ha podido guardar la configuración pública. Inténtalo de nuevo.",
   },
   en: {
-    unauthorized: "Session expired. Ask the bot for a new link with /panel.",
-    badLink: "That link has already been used or has expired. Ask for another with /panel.",
+    unauthorized: "Session expired. Ask the bot for a new code with /panel.",
     badMsisdn: "The phone number must be in international format, e.g. +34600111222.",
     duplicate: "That number is already registered.",
     notFound: "No device is registered with that number.",
@@ -169,33 +169,14 @@ export function createPanelApi(
   const isSecure = (url: string) => new URL(url).protocol === "https:";
 
   // ── Session ──
+  //
+  // No exchange route here any more (spec 2026-07-27 §5): the token-in-a-URL
+  // flow is gone, and what replaces it — redeeming a code typed into the
+  // public login page — lives outside /api entirely, at POST /panel (see
+  // main.ts and src/web/login.ts). Every route below needs a session; there
+  // is no longer an unauthenticated one to carve out of the gate.
 
-  api.post("/session/exchange", async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const token = z.object({ token: z.string().min(1) }).safeParse(body);
-    // `locale` on a 401 here is not sensitive — it's how the panel's
-    // signed-out screen knows which language to use before any session
-    // exists (spec 2.3). See panel/src/api/client.ts's SessionResult.
-    if (!token.success) {
-      return c.json({ error: m.badLink, locale: config.village.locale }, 401);
-    }
-
-    const session = await exchangeLink(store, token.data.token);
-    if (!session) return c.json({ error: m.badLink, locale: config.village.locale }, 401);
-
-    c.header("set-cookie", sessionCookie(session.token, isSecure(c.req.url)));
-    return c.json({
-      telegramId: session.telegramId,
-      name: session.name,
-      village: config.village.name,
-      locale: config.village.locale,
-    });
-  });
-
-  // Everything below this point needs a session.
   api.use("*", async (c, next) => {
-    if (c.req.path.endsWith("/session/exchange")) return await next();
-
     const token = tokenFromCookies(c.req.header("cookie") ?? null);
     const session = token ? await store.getSession(token) : null;
     if (!session) return c.json({ error: m.unauthorized, locale: config.village.locale }, 401);

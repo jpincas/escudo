@@ -72,10 +72,8 @@ export const es: Strings = {
     menuExport: "Descargar el registro de incidencias",
     menuChatId: "Ver el identificador de este chat",
     menuPanel: "Abrir el panel de administración",
-    panelLink:
-      "Panel de administración de la Red Escudo:\n\n{url}\n\nEl enlace caduca en 10 minutos y solo funciona una vez. No se lo reenvíes a nadie: quien lo abra entra como tú.",
-    panelNoUrl:
-      "⚠️ No sé en qué dirección estoy publicado, así que no puedo darte un enlace.\n\nConfigura la variable de entorno ESCUDO_PUBLIC_URL con la dirección del bot (por ejemplo https://escudo-bot.ejemplo.deno.net) y vuelve a escribir /panel.",
+    panelCode:
+      "Código de acceso al panel de administración de la Red Escudo: {code}\n\nAbre la página de bienvenida, pulsa «Acceso administración» y escríbelo ahí. Caduca en 10 minutos y solo funciona una vez. No lo compartas: quien lo escriba entra como tú.",
     testSent: "Simulacro enviado al grupo.",
     pinned: "Listo. Ya está fijado el mensaje con los botones de aviso.",
     pinFailed:
@@ -101,5 +99,16 @@ export const es: Strings = {
       "Escudo no sustituye a las autoridades. Ante una emergencia, llama primero a:",
     photoAlt: "Foto del pueblo",
     responsiblePeopleHeading: "Personas responsables",
+  },
+
+  login: {
+    heading: "Acceso de administración",
+    instructions:
+      "Escribe /panel al bot de Escudo en Telegram. Te responderá con un código de 9 dígitos: escríbelo aquí abajo.",
+    codeLabel: "Código",
+    codeHelp: "El código de 9 dígitos que te ha enviado el bot, por ejemplo 123 456 789.",
+    submit: "Entrar",
+    error: "Ese código no es válido. Pide otro al bot con /panel.",
+    backToWelcome: "Volver",
   },
 };

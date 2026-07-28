@@ -223,29 +223,141 @@ for (const [name, open] of backends) {
     }
   });
 
-  Deno.test(`${name}: a panel link works exactly once`, async () => {
+  Deno.test(`${name}: a panel code works exactly once`, async () => {
     const store = await open();
     try {
-      const future = new Date(Date.now() + 600_000).toISOString();
-      await store.putPanelLink({ token: "t1", telegramId: "42", name: "Jon", expiresAt: future });
+      const now = new Date();
+      const future = new Date(now.getTime() + 600_000).toISOString();
+      await store.putPanelCode({
+        code: "123456789",
+        telegramId: "42",
+        name: "Jon",
+        expiresAt: future,
+      });
 
-      assertEquals((await store.takePanelLink("t1"))?.telegramId, "42");
-      // Spent. A forwarded or re-pasted link must not open a second session.
-      assertEquals(await store.takePanelLink("t1"), null);
-      assertEquals(await store.takePanelLink("never-existed"), null);
+      assertEquals((await store.takePanelCode("123456789", now))?.telegramId, "42");
+      // Spent. A forwarded, screenshotted or re-pasted code must not open a
+      // second session.
+      assertEquals(await store.takePanelCode("123456789", now), null);
+      assertEquals(await store.takePanelCode("never-existed", now), null);
     } finally {
       store.close();
     }
   });
 
-  Deno.test(`${name}: expired links and sessions are refused`, async () => {
+  // Review finding F2: two concurrent redemptions of the *same* correct code
+  // must not both succeed. This is only observable against real concurrency
+  // — MemoryStore's synchronous Map can't exhibit the race a naive KV
+  // get-then-set would, so running this against KvStore specifically is the
+  // point. (Confirmed by hand against the pre-fix code: takePanelCode's
+  // `.check(entry).delete(key).commit()` was already correct before this
+  // finding — the race F2 found was in bumpRateLimit, tested below — but a
+  // regression here would be exactly as dangerous, so it stays pinned.)
+  Deno.test(`${name}: exactly one of many concurrent redemptions of one code succeeds`, async () => {
+    const store = await open();
+    try {
+      const now = new Date();
+      const future = new Date(now.getTime() + 600_000).toISOString();
+      await store.putPanelCode({
+        code: "778899001",
+        telegramId: "42",
+        name: "Jon",
+        expiresAt: future,
+      });
+
+      const results = await Promise.all(
+        Array.from({ length: 200 }, () => store.takePanelCode("778899001", now)),
+      );
+      const successes = results.filter((r) => r !== null);
+      assertEquals(successes.length, 1);
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: issuing a new code supersedes any code already outstanding for that admin`, async () => {
+    const store = await open();
+    try {
+      const now = new Date();
+      const future = new Date(now.getTime() + 600_000).toISOString();
+      await store.putPanelCode({
+        code: "111111111",
+        telegramId: "42",
+        name: "Jon",
+        expiresAt: future,
+      });
+      await store.putPanelCode({
+        code: "222222222",
+        telegramId: "42",
+        name: "Jon",
+        expiresAt: future,
+      });
+
+      // A6: the old code is dead the moment the new one is minted — a code
+      // scrolled back to in an old message must not work.
+      assertEquals(await store.takePanelCode("111111111", now), null);
+      assertEquals((await store.takePanelCode("222222222", now))?.telegramId, "42");
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: bumpRateLimit counts within a window and resets after it`, async () => {
+    const store = await open();
+    try {
+      const t0 = new Date("2026-07-27T10:00:00.000Z");
+      assertEquals(await store.bumpRateLimit("login", 60_000, t0), 1);
+      assertEquals(await store.bumpRateLimit("login", 60_000, t0), 2);
+
+      // A different key is a different bucket entirely.
+      assertEquals(await store.bumpRateLimit("something-else", 60_000, t0), 1);
+
+      // Still within the window: keeps climbing.
+      const t1 = new Date(t0.getTime() + 30_000);
+      assertEquals(await store.bumpRateLimit("login", 60_000, t1), 3);
+
+      // Past the window: starts over, independent of anything issued in the
+      // meantime — the rate limit "survives across codes" (spec 5.2) because
+      // it is anchored to wall-clock time, not to a code's own lifecycle.
+      const t2 = new Date(t0.getTime() + 61_000);
+      assertEquals(await store.bumpRateLimit("login", 60_000, t2), 1);
+    } finally {
+      store.close();
+    }
+  });
+
+  // Review finding F2, reproduced and pinned: a plain `get` then `set` with
+  // no compare-and-swap let 200 concurrent callers land as few as 4 — 196
+  // free, uncounted guesses, since a losing racer's increment was simply
+  // discarded rather than retried. This must fail against that version and
+  // pass against the atomic retry-loop version (verified by hand: reverting
+  // bumpRateLimit to a bare get-then-set reliably drops this test's count
+  // well below 200 against KvStore).
+  Deno.test(`${name}: bumpRateLimit is exact under real concurrency, not approximate`, async () => {
+    const store = await open();
+    try {
+      const now = new Date();
+      const CONCURRENT = 200;
+      const results = await Promise.all(
+        Array.from({ length: CONCURRENT }, () => store.bumpRateLimit("login", 600_000, now)),
+      );
+      // Every one of 200 concurrent bumps must be counted — the highest
+      // value handed back must be exactly the number of callers, and the
+      // values handed back must be the 200 distinct integers 1..200 with no
+      // collisions (which is what "some got silently dropped" looks like:
+      // duplicates and a low ceiling instead of a clean run).
+      assertEquals(Math.max(...results), CONCURRENT);
+      assertEquals(new Set(results).size, CONCURRENT);
+    } finally {
+      store.close();
+    }
+  });
+
+  Deno.test(`${name}: expired sessions are refused`, async () => {
     const store = await open();
     try {
       const past = new Date(Date.now() - 1_000).toISOString();
       const future = new Date(Date.now() + 600_000).toISOString();
-
-      await store.putPanelLink({ token: "old", telegramId: "42", name: "Jon", expiresAt: past });
-      assertEquals(await store.takePanelLink("old"), null);
 
       await store.putSession({
         token: "s-old",

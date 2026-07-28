@@ -14,7 +14,19 @@
 //   ["village_profile"]                    → VillageProfile (single row; §3
 //                                              spec 2026-07-27 — presentation
 //                                              only, see its own doc in types.ts)
-//   ["panel_link", token]                  → PanelLink   (one-time, expiring)
+//   ["panel_code", code]                   → PanelCode  (one-time login code,
+//                                              §5 spec 2026-07-27; the code
+//                                              value itself is the key, so a
+//                                              guess that doesn't exist finds
+//                                              nothing and touches nothing —
+//                                              see PanelCode's own doc)
+//   ["panel_code_admin", telegramId]       → code       (pointer, so a fresh
+//                                              code can supersede an admin's
+//                                              old one, A6)
+//   ["rate_limit", key]                    → { count, resetAt } (login
+//                                              endpoint rate limiting, §5.2 —
+//                                              one fixed key for the whole
+//                                              deployment; see src/web/login.ts)
 //   ["panel_session", token]               → PanelSession (expiring)
 //   ["meta", key]                          → string    (bot housekeeping)
 //
@@ -34,7 +46,7 @@ import {
   type Incident,
   type Member,
   migrateDevice,
-  type PanelLink,
+  type PanelCode,
   type PanelSession,
   type Store,
   type VillageProfile,
@@ -47,9 +59,25 @@ const memberKey = (telegramId: string): Deno.KvKey => ["member", telegramId];
 const deviceKey = (msisdn: string): Deno.KvKey => ["device", msisdn];
 const inboxKey = (msisdn: string): Deno.KvKey => ["inbox", msisdn];
 const villageProfileKey: Deno.KvKey = ["village_profile"];
-const panelLinkKey = (token: string): Deno.KvKey => ["panel_link", token];
+const panelCodeKey = (code: string): Deno.KvKey => ["panel_code", code];
+const panelCodeAdminKey = (telegramId: string): Deno.KvKey => ["panel_code_admin", telegramId];
+const rateLimitKey = (key: string): Deno.KvKey => ["rate_limit", key];
 const panelSessionKey = (token: string): Deno.KvKey => ["panel_session", token];
 const metaKey = (key: string): Deno.KvKey => ["meta", key];
+
+interface RateLimitWindow {
+  count: number;
+  /** ISO 8601, UTC — when this window's count resets to zero. */
+  resetAt: string;
+}
+
+/** Bounded retries for bumpRateLimit()'s optimistic-concurrency loop. Sized
+ *  generously rather than tightly: each retry is one more KV round trip, not
+ *  a meaningful cost, and this is the one place a deliberate flood is the
+ *  expected input (that's the whole point of the counter it maintains), so
+ *  it needs headroom for real contention rather than the handful of
+ *  requests one village's ordinary login traffic produces. */
+const RATE_LIMIT_RETRIES = 1000;
 
 /** Milliseconds until an ISO timestamp, floored at zero. */
 function msUntil(isoTimestamp: string): number {
@@ -225,22 +253,72 @@ export class KvStore implements Store {
     await this.kv.set(villageProfileKey, profile);
   }
 
-  async putPanelLink(link: PanelLink): Promise<void> {
-    await this.kv.set(panelLinkKey(link.token), link, { expireIn: msUntil(link.expiresAt) });
+  async putPanelCode(entry: PanelCode): Promise<void> {
+    // Superseding any code already outstanding for this admin (A6) happens
+    // in the same write: read the admin's current code, if any, and delete it
+    // as part of the same transaction that stores the new one — there is
+    // never a moment where both are live.
+    const adminKey = panelCodeAdminKey(entry.telegramId);
+    const existing = await this.kv.get<string>(adminKey);
+
+    const tx = this.kv.atomic();
+    if (existing.value) tx.delete(panelCodeKey(existing.value));
+    tx.set(panelCodeKey(entry.code), entry, { expireIn: msUntil(entry.expiresAt) });
+    tx.set(adminKey, entry.code, { expireIn: msUntil(entry.expiresAt) });
+
+    const result = await tx.commit();
+    if (!result.ok) throw new Error(`Failed to store panel code for ${entry.telegramId}`);
   }
 
-  async takePanelLink(token: string): Promise<PanelLink | null> {
-    const key = panelLinkKey(token);
-    const entry = await this.kv.get<PanelLink>(key);
+  async takePanelCode(code: string, now: Date): Promise<PanelCode | null> {
+    const key = panelCodeKey(code);
+    const entry = await this.kv.get<PanelCode>(key);
     if (!entry.value) return null;
 
-    // Delete before returning, and only honour the link if *this* call is the
-    // one that removed it: two requests racing the same token must not both
-    // come back with a session.
+    // Delete before returning, and only honour it if *this* call is the one
+    // that removed it: two requests racing the same correct code must not
+    // both come back with a session. The admin-pointer key is left as is —
+    // it may already point at a newer code if one has superseded this one,
+    // and putPanelCode() cleans up whatever it finds when that happens;
+    // deleting it here unconditionally would risk removing a live newer
+    // code's own pointer.
     const deleted = await this.kv.atomic().check(entry).delete(key).commit();
     if (!deleted.ok) return null;
 
-    return new Date(entry.value.expiresAt) > new Date() ? entry.value : null;
+    return new Date(entry.value.expiresAt) > now ? entry.value : null;
+  }
+
+  /**
+   * Retries under contention rather than dropping a losing racer's
+   * increment (review finding F2): `get` then `set` with no compare-and-swap
+   * let 200 concurrent callers land as few as 4 — 196 free, uncounted
+   * guesses. Every attempt here re-reads the current value and re-commits
+   * against it with `.check()`, so a losing racer tries again against
+   * whatever the winner just wrote, instead of silently vanishing.
+   */
+  async bumpRateLimit(key: string, windowMs: number, now: Date): Promise<number> {
+    const k = rateLimitKey(key);
+    const nowMs = now.getTime();
+
+    for (let attempt = 0; attempt < RATE_LIMIT_RETRIES; attempt++) {
+      const entry = await this.kv.get<RateLimitWindow>(k);
+      const expired = !entry.value || new Date(entry.value.resetAt).getTime() <= nowMs;
+      const count = expired ? 1 : entry.value!.count + 1;
+      const resetAt = expired ? new Date(nowMs + windowMs).toISOString() : entry.value!.resetAt;
+
+      const result = await this.kv.atomic()
+        .check(entry)
+        .set(k, { count, resetAt } satisfies RateLimitWindow, { expireIn: msUntil(resetAt) })
+        .commit();
+      if (result.ok) return count;
+      // Lost the race — another caller wrote first. Loop and retry against
+      // the value they left, rather than returning as if nothing happened.
+    }
+
+    // Exhausted every retry under heavy contention. Fail closed: a caller
+    // that cannot prove it landed under the limit is treated as over it,
+    // never as clear — the one direction that can't turn into a free guess.
+    return Number.MAX_SAFE_INTEGER;
   }
 
   async putSession(session: PanelSession): Promise<void> {
