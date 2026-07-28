@@ -73,7 +73,7 @@ export const es: Strings = {
     menuChatId: "Ver el identificador de este chat",
     menuPanel: "Abrir el panel de administración",
     panelCode:
-      "Código de acceso al panel de administración de la Red Escudo: {code}\n\nAbre la página de bienvenida, pulsa «Acceso administración» y escríbelo ahí. Caduca en 10 minutos y solo funciona una vez. No lo compartas: quien lo escriba entra como tú.",
+      "Código de acceso al panel de administración de la Red Escudo:\n<code>{code}</code>\n\nAbre la página de bienvenida, pulsa «Acceso administración» y escríbelo ahí. Caduca en 10 minutos y solo funciona una vez. No lo compartas: quien lo escriba entra como tú.",
     testSent: "Simulacro enviado al grupo.",
     pinned: "Listo. Ya está fijado el mensaje con los botones de aviso.",
     pinFailed:

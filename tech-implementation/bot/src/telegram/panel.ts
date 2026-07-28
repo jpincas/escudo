@@ -38,6 +38,11 @@ export function registerPanel(bot: Bot, config: Config, store: Store): void {
     );
 
     await ctx.reply(t(s.cmd.panelCode, { code: formatCodeForDisplay(issued.code) }), {
+      // HTML so the code renders on its own line in monospace, the same way
+      // /chatid presents an id. Telegram also makes a <code> span tap-to-copy,
+      // which is the difference between reading nine digits off a phone and
+      // copying them.
+      parse_mode: "HTML",
       // Re-send the keyboard with the code. A reply carrying no markup leaves
       // Telegram Desktop showing the buttons collapsed behind the icon in the
       // input bar, and an admin who has just used /panel would be looking at a

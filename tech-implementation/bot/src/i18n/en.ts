@@ -77,7 +77,7 @@ export const en: Strings = {
     menuChatId: "Show this chat's id",
     menuPanel: "Open the admin panel",
     panelCode:
-      'Red Escudo admin panel login code: {code}\n\nOpen the welcome page, tap "Admin login", and type it in. It expires in 10 minutes and works once. Don\'t share it: whoever enters it signs in as you.',
+      'Red Escudo admin panel login code:\n<code>{code}</code>\n\nOpen the welcome page, tap "Admin login", and type it in. It expires in 10 minutes and works once. Don\'t share it: whoever enters it signs in as you.',
     testSent: "Drill sent to the group.",
     pinned: "Done. The message with the alert buttons is now pinned.",
     pinFailed:

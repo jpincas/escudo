@@ -94,7 +94,14 @@ export interface Strings {
     menuChatId: string;
     menuPanel: string;
     /** The one-time login code (spec 2026-07-27 §5), and nothing else — no
-     *  URL. {code} */
+     *  URL. {code}
+     *
+     *  The code goes on its own line, in <code>, and the message is sent with
+     *  parse_mode HTML. Inline at the end of a sentence it is genuinely easy to
+     *  misread the first group — which is what happened the first time a real
+     *  admin used it. §5.2 asks for something typeable by an older volunteer
+     *  reading a phone at arm's length; that starts with being able to see
+     *  where the code begins. */
     panelCode: string;
     /** Confirmation to an admin who ran /test from outside the group. */
     testSent: string;
