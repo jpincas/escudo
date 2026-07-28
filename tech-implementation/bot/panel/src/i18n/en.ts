@@ -26,14 +26,6 @@ export const en: Strings = {
     signOut: "Sign out",
   },
 
-  placeholder: {
-    inbox: {
-      heading: "Inbox",
-      body: "Numbers that have called Escudo without being registered will " +
-        "appear here, ready to register as a device. Not built yet.",
-    },
-  },
-
   devices: {
     heading: "Devices",
     add: "Add device",
@@ -71,6 +63,7 @@ export const en: Strings = {
   form: {
     addTitle: "Add device",
     editTitle: "Edit device",
+    registerTitle: "Register device",
     msisdn: "Phone",
     msisdnHelp: "International format, e.g. +34600111222. Cannot be changed afterwards.",
     label: "Label",
@@ -135,6 +128,44 @@ export const en: Strings = {
     save: "Save",
     saving: "Saving…",
     saved: "Saved.",
+  },
+
+  inbox: {
+    heading: "Inbox",
+    intro: "Numbers that call or text Escudo without being registered " +
+      "appear here, ready to register or dismiss. Deleted automatically " +
+      "after {days} days.",
+    empty: {
+      heading: "No numbers waiting",
+      body: "When someone calls or texts the Escudo bridge from a number " +
+        "that isn't registered as a device yet, it appears here so it can " +
+        "be registered or dismissed. It's also the only warning that a " +
+        "device was installed and never finished being set up.",
+    },
+    columns: {
+      msisdn: "Phone",
+      count: "Times",
+      firstSeen: "First seen",
+      lastSeen: "Last seen",
+      channel: "Via",
+      lastBody: "Last message",
+      actions: "Actions",
+    },
+    channel: {
+      call: "Call",
+      sms: "SMS",
+    },
+    register: "Register",
+    dismiss: "Dismiss",
+  },
+
+  dismissConfirm: {
+    heading: "Dismiss number",
+    body: 'You are about to dismiss "{msisdn}" from the inbox. No device ' +
+      "will be created, and if the number calls again it will reappear here.",
+    confirm: "Dismiss",
+    cancel: "Cancel",
+    dismissing: "Dismissing…",
   },
 
   history: {

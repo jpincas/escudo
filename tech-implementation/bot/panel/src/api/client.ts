@@ -6,8 +6,10 @@ import type {
   Device,
   DeviceEdit,
   IncidentPage,
+  InboxEntry,
   Me,
   NewDevice,
+  RegisterFromInbox,
   VillageProfile,
   VillageProfileWrite,
 } from "./types.ts";
@@ -169,4 +171,31 @@ export async function saveVillageProfile(body: VillageProfileWrite): Promise<Vil
 export async function fetchIncidents(cursor: string | null = null): Promise<IncidentPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   return request<IncidentPage>(`/api/incidents${query}`);
+}
+
+// ── Bridge inbox (spec 2026-07-27 §7) ──
+
+export async function fetchInbox(): Promise<InboxEntry[]> {
+  return request<InboxEntry[]>("/api/inbox");
+}
+
+/**
+ * Register a device from an inbox entry. Goes through the exact same backend
+ * validation and duplicate check as createDevice() above — see
+ * src/panel/api.ts's registerDevice() for where that is actually enforced;
+ * this is only the wire call.
+ */
+export async function registerFromInbox(
+  msisdn: string,
+  body: RegisterFromInbox,
+): Promise<Device> {
+  return request<Device>(`/api/inbox/${encodeURIComponent(msisdn)}/register`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Dismiss an inbox entry — a wrong number or a misdial. Creates nothing. */
+export async function dismissInboxEntry(msisdn: string): Promise<void> {
+  await request<void>(`/api/inbox/${encodeURIComponent(msisdn)}`, { method: "DELETE" });
 }

@@ -772,6 +772,161 @@ Deno.test("an empty cursor is treated as no cursor, not as a malformed one", asy
   assertEquals((await res.json()).incidents.length, 1);
 });
 
+// ── Bridge inbox (spec 2026-07-27 §7) ──
+
+Deno.test("the inbox route is refused without a session", async () => {
+  const { api } = setup();
+  assertEquals((await api.request(`${BASE}/inbox`)).status, 401);
+});
+
+Deno.test("the inbox lists newest first", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.noteInbound("+34600111111", "call", null, new Date("2026-07-01T10:00:00.000Z"));
+  await store.noteInbound(
+    "+34600222222",
+    "sms",
+    "SOS ALM 01",
+    new Date("2026-07-02T10:00:00.000Z"),
+  );
+  await store.noteInbound("+34600333333", "call", null, new Date("2026-07-03T10:00:00.000Z"));
+
+  const res = await api.request(`${BASE}/inbox`, { headers: { cookie } });
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.map((e: { msisdn: string }) => e.msisdn), [
+    "+34600333333",
+    "+34600222222",
+    "+34600111111",
+  ]);
+  assertEquals(body[1].lastVia, "sms");
+  assertEquals(body[1].lastBody, "SOS ALM 01");
+});
+
+Deno.test("dismissing an inbox entry removes it and creates no device", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.noteInbound("+34600444444", "call", null, new Date("2026-07-01T10:00:00.000Z"));
+
+  const res = await api.request(`${BASE}/inbox/+34600444444`, {
+    method: "DELETE",
+    headers: { cookie },
+  });
+  assertEquals(res.status, 204);
+  assertEquals(await store.listInbox(), []);
+  assertEquals(await store.getDevice("+34600444444"), null);
+});
+
+Deno.test("dismissing an entry that no longer exists is refused", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  const res = await api.request(`${BASE}/inbox/+34600555555`, {
+    method: "DELETE",
+    headers: { cookie },
+  });
+  assertEquals(res.status, 404);
+});
+
+Deno.test("registering from the inbox creates the device and removes the inbox entry", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.noteInbound("+34600666666", "call", null, new Date("2026-07-01T10:00:00.000Z"));
+
+  const res = await api.request(`${BASE}/inbox/+34600666666/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ label: "Casa Nueva", address: "Calle Real 20", kind: "base" }),
+  });
+  assertEquals(res.status, 201);
+  const device = await res.json();
+  assertEquals(device.msisdn, "+34600666666");
+  assertEquals(device.label, "Casa Nueva");
+
+  assertEquals((await store.getDevice("+34600666666"))?.address, "Calle Real 20");
+  assertEquals(await store.listInbox(), []);
+});
+
+// The single most dangerous case in this section (spec's "must not happen"):
+// re-registering a number that is already a device would silently repoint a
+// household's alarm at a different address. Both the existing device and the
+// inbox entry must be left exactly as they were.
+Deno.test("registering a number that is already a device is refused, and nothing is touched", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  await store.putDevice({
+    msisdn: "+34600777777",
+    label: "Casa de María",
+    address: "Calle Real 14",
+    kind: "base",
+    lastProvenAt: null,
+    registeredAt: "2026-06-01T10:00:00.000Z",
+  });
+  await store.noteInbound("+34600777777", "call", null, new Date("2026-07-01T10:00:00.000Z"));
+
+  const res = await api.request(`${BASE}/inbox/+34600777777/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ label: "Otra casa", address: "Otra calle", kind: "phone" }),
+  });
+  assertEquals(res.status, 400);
+  assertEquals(typeof (await res.json()).error, "string");
+
+  // The original device is untouched...
+  const device = await store.getDevice("+34600777777");
+  assertEquals(device?.label, "Casa de María");
+  assertEquals(device?.address, "Calle Real 14");
+  // ...and the inbox entry is still there too — a refused registration must
+  // not silently drop the very row it failed to act on.
+  assertEquals((await store.listInbox()).map((e) => e.msisdn), ["+34600777777"]);
+});
+
+Deno.test("registering with a missing field is refused", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+  await store.noteInbound("+34600888888", "call", null, new Date("2026-07-01T10:00:00.000Z"));
+
+  const res = await api.request(`${BASE}/inbox/+34600888888/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ label: "Casa", kind: "base" }), // address missing
+  });
+  assertEquals(res.status, 400);
+  assertEquals(await store.getDevice("+34600888888"), null);
+  assertEquals((await store.listInbox()).map((e) => e.msisdn), ["+34600888888"]);
+});
+
+// Review 2026-07-28, F2: without this, registering a number the bridge never
+// recorded (or one already dismissed / registered by another tab) is a
+// second, unguarded way to create a device — the route's own comment claims
+// there is exactly one, and this is what makes that true.
+Deno.test("registering a number that never reached the inbox is refused", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  const res = await api.request(`${BASE}/inbox/+34600999111/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ label: "Casa", address: "Calle", kind: "base" }),
+  });
+  assertEquals(res.status, 404);
+  assertEquals(await store.getDevice("+34600999111"), null);
+});
+
+// Spec §7.3: the session route is how the SPA learns the inbox's own
+// retention window, since it is a fixed constant, not a village policy field.
+Deno.test("session carries the inbox retention window", async () => {
+  const { api, store } = setup();
+  const cookie = await signIn(store);
+
+  const res = await api.request(`${BASE}/session`, { headers: { cookie } });
+  assertEquals((await res.json()).inboxRetentionDays, 30);
+});
+
 Deno.test("signing out kills the session immediately", async () => {
   const { api, store } = setup();
   const cookie = await signIn(store);

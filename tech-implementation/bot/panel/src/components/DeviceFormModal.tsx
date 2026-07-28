@@ -1,6 +1,12 @@
 import { type FormEvent, useState } from "react";
 import { ApiError } from "../api/client.ts";
-import type { Device, DeviceEdit, DeviceKind, NewDevice } from "../api/types.ts";
+import type {
+  Device,
+  DeviceEdit,
+  DeviceKind,
+  NewDevice,
+  RegisterFromInbox,
+} from "../api/types.ts";
 import { useStrings } from "../i18n/context.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -16,8 +22,12 @@ const E164_PATTERN = /^\+[1-9]\d{6,14}$/;
 
 // Discriminated on `mode` so each branch gets its own `onSubmit` shape:
 // adding sends the full NewDevice (msisdn included), editing sends only the
-// mutable fields. That keeps the "msisdn is not editable" rule enforced by
-// the type system, not just by the read-only input below.
+// mutable fields, and registering from the inbox (spec 2026-07-27 §7.2)
+// sends the same shape as editing plus the msisdn separately — it's the path
+// param of POST /inbox/:msisdn/register, not a body field, so there is
+// exactly one number this submission can possibly act on (see
+// src/panel/api.ts). Keeps the "msisdn is not editable" rule enforced by the
+// type system, not just by the read-only input below.
 type DeviceFormModalProps =
   | { mode: "add"; onSubmit: (values: NewDevice) => Promise<Device>; onClose: () => void }
   | {
@@ -25,12 +35,28 @@ type DeviceFormModalProps =
     device: Device;
     onSubmit: (values: DeviceEdit) => Promise<Device>;
     onClose: () => void;
+  }
+  | {
+    mode: "register";
+    /** The number that reached the bridge — pre-filled, never editable: this
+     *  is a shortcut into the ordinary add-device path for a number that's
+     *  already known, not a second way to type one in. */
+    msisdn: string;
+    onSubmit: (values: RegisterFromInbox) => Promise<Device>;
+    onClose: () => void;
   };
 
 export function DeviceFormModal(props: DeviceFormModalProps) {
   const s = useStrings();
   const { onClose } = props;
   const device = props.mode === "edit" ? props.device : undefined;
+
+  // The one field every mode handles differently: editable only in "add".
+  const readonlyMsisdn = props.mode === "edit"
+    ? props.device.msisdn
+    : props.mode === "register"
+    ? props.msisdn
+    : null;
 
   const [msisdn, setMsisdn] = useState(device?.msisdn ?? "");
   const [label, setLabel] = useState(device?.label ?? "");
@@ -44,7 +70,7 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
     setError(null);
     setSubmitting(true);
     try {
-      if (props.mode === "edit") {
+      if (props.mode === "edit" || props.mode === "register") {
         await props.onSubmit({ label, address, kind });
       } else {
         await props.onSubmit({ msisdn, label, address, kind });
@@ -56,16 +82,22 @@ export function DeviceFormModal(props: DeviceFormModalProps) {
     }
   }
 
+  const title = props.mode === "edit"
+    ? s.form.editTitle
+    : props.mode === "register"
+    ? s.form.registerTitle
+    : s.form.addTitle;
+
   return (
-    <Modal title={device ? s.form.editTitle : s.form.addTitle} onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <div className="form-field">
           <label htmlFor="device-msisdn">{s.form.msisdn}</label>
-          {device
+          {readonlyMsisdn !== null
             ? (
-              // The key can't change once a device exists — reads as plain
-              // text so it's never mistaken for an editable field.
-              <p className="form-field__readonly" id="device-msisdn">{device.msisdn}</p>
+              // Fixed for this submission — reads as plain text so it's
+              // never mistaken for an editable field.
+              <p className="form-field__readonly" id="device-msisdn">{readonlyMsisdn}</p>
             )
             : (
               <>

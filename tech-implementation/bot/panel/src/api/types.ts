@@ -15,6 +15,10 @@ export interface Me {
   /** Days the incident log is kept before retention deletes it — shown on
    *  the History screen so "not a permanent archive" is a fact, not a guess. */
   retentionDays: number;
+  /** Days an unregistered caller sits in the bridge inbox before retention
+   *  deletes it (spec 2026-07-27 §7.3) — a fixed constant, not a village
+   *  policy field, so it travels the same way retentionDays does. */
+  inboxRetentionDays: number;
 }
 
 export type DeviceKind = "base" | "wearable" | "phone" | "alarm" | "other";
@@ -121,4 +125,38 @@ export interface IncidentPage {
   /** Opaque; pass back as `?cursor=` to fetch the next page. Null means this
    *  page reached the end of the log. */
   nextCursor: string | null;
+}
+
+// ── Bridge inbox (spec 2026-07-27 §7) ──
+
+/** How something reached the bridge. */
+export type BridgeChannel = "call" | "sms";
+
+/**
+ * A number that contacted the bridge but isn't registered, as GET /api/inbox
+ * returns it — mirrors the backend's own InboxEntry in src/store/types.ts
+ * field for field. See that type's doc for why this exists: it's how a
+ * household actually joins.
+ */
+export interface InboxEntry {
+  /** E.164. */
+  msisdn: string;
+  /** How many times this number has reached the bridge. */
+  count: number;
+  /** ISO 8601 UTC. */
+  firstSeenAt: string;
+  /** ISO 8601 UTC. */
+  lastSeenAt: string;
+  lastVia: BridgeChannel;
+  /** Last message body, if it was an SMS. Often names the device's maker. */
+  lastBody: string | null;
+}
+
+/** Body for POST /api/inbox/:msisdn/register — the number itself is the URL
+ *  param, never part of the body, so there is exactly one number this
+ *  request can possibly act on. */
+export interface RegisterFromInbox {
+  label: string;
+  address: string;
+  kind: DeviceKind;
 }

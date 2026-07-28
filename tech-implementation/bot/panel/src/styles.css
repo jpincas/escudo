@@ -414,6 +414,62 @@ button.button--danger-text:hover:not(:disabled) {
   margin-top: 16px;
 }
 
+/* ── Inbox (spec 2026-07-27 §7) ───────────────────────────────────── */
+
+.inbox-screen__intro {
+  color: #55534c;
+  max-width: 640px;
+}
+
+.inbox-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.inbox-table th,
+.inbox-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.inbox-table th {
+  background: var(--verde);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.inbox-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inbox-table tbody tr:hover {
+  background: #f1efe9;
+}
+
+/* The last SMS body often names the device's manufacturer (spec §7.1) — kept
+   readable rather than clipped to one line. */
+.inbox-table__body {
+  max-width: 260px;
+  white-space: normal;
+  word-break: break-word;
+  color: #55534c;
+}
+
+.inbox-table__actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 /* ── Status badge ──────────────────────────────────────────────────── */
 
 .status-badge {

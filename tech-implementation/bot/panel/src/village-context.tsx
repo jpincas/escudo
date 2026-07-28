@@ -12,15 +12,19 @@ export interface VillageInfo {
   timezone: string;
   /** Days the incident log is kept before retention deletes it. */
   retentionDays: number;
+  /** Days an unregistered caller sits in the bridge inbox before retention
+   *  deletes it (spec 2026-07-27 §7.3) — read from the session, not
+   *  hardcoded, same as retentionDays above. */
+  inboxRetentionDays: number;
 }
 
 const VillageContext = createContext<VillageInfo | null>(null);
 
 export function VillageProvider(
-  { timezone, retentionDays, children }: VillageInfo & { children: ReactNode },
+  { timezone, retentionDays, inboxRetentionDays, children }: VillageInfo & { children: ReactNode },
 ) {
   return (
-    <VillageContext.Provider value={{ timezone, retentionDays }}>
+    <VillageContext.Provider value={{ timezone, retentionDays, inboxRetentionDays }}>
       {children}
     </VillageContext.Provider>
   );

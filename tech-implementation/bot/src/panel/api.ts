@@ -29,6 +29,7 @@ import type { AlertService } from "../alerts.ts";
 import { DEFAULT_CATEGORY } from "../bridge/inbound.ts";
 import { formatAlert, resolveCategory } from "../format.ts";
 import { MSISDN, normaliseMsisdn } from "../msisdn.ts";
+import { INBOX_RETENTION_DAYS } from "../jobs/retention.ts";
 
 /**
  * Panel copy lives here rather than in src/i18n, which types every string the
@@ -43,6 +44,7 @@ const MESSAGES = {
     badMsisdn: "El teléfono debe estar en formato internacional, por ejemplo +34600111222.",
     duplicate: "Ese número ya está registrado.",
     notFound: "No existe ningún dispositivo con ese número.",
+    inboxNotFound: "Esa entrada ya no está en la bandeja de entrada.",
     invalid: "Faltan datos o no son válidos.",
     simulateUnavailable: "Las alertas de prueba no están disponibles en esta instalación.",
     badPhotoUrl: "La URL de la foto debe empezar por https://.",
@@ -61,6 +63,7 @@ const MESSAGES = {
     badMsisdn: "The phone number must be in international format, e.g. +34600111222.",
     duplicate: "That number is already registered.",
     notFound: "No device is registered with that number.",
+    inboxNotFound: "That entry is no longer in the inbox.",
     invalid: "Something is missing or invalid.",
     simulateUnavailable: "Test alerts are not available in this deployment.",
     badPhotoUrl: "The photo URL must start with https://.",
@@ -94,6 +97,16 @@ const UpdateDevice = z.object({
   label: z.string().trim().min(1).optional(),
   address: z.string().trim().min(1).optional(),
   kind: z.enum(KINDS).optional(),
+});
+
+// Same required fields as CreateDevice, minus msisdn — that comes from the
+// inbox entry being registered (the URL param), not the body, so there is
+// exactly one place a household's number is typed in by hand: the plain
+// "Add device" form.
+const RegisterFromInbox = z.object({
+  label: z.string().trim().min(1),
+  address: z.string().trim().min(1),
+  kind: z.enum(KINDS),
 });
 
 // The village profile is written as one row, not patched field by field
@@ -141,6 +154,38 @@ export function deviceStatus(
   if (!device.lastProvenAt) return "never";
   const ageDays = (now.getTime() - new Date(device.lastProvenAt).getTime()) / 86_400_000;
   return ageDays > proveWithinDays ? "overdue" : "ok";
+}
+
+/**
+ * The one place a Device record is created. Both POST /devices (adding one by
+ * hand) and POST /inbox/:msisdn/register (spec 2026-07-27 §7.2) call this and
+ * nothing else — the inbox route does not repeat the normalise → validate →
+ * duplicate-check → put sequence itself, because a second copy of that
+ * sequence is exactly how a duplicate check gets bypassed by accident later.
+ * Re-registering an existing number would silently repoint a household's
+ * alarm at a different address (spec's "must not happen"), so this is the one
+ * function ever allowed to decide that question.
+ */
+async function registerDevice(
+  store: Store,
+  input: { msisdn: string; label: string; address: string; kind: DeviceKind },
+): Promise<
+  { ok: true; device: Device } | { ok: false; reason: "badMsisdn" | "duplicate" }
+> {
+  const msisdn = normaliseMsisdn(input.msisdn);
+  if (!MSISDN.test(msisdn)) return { ok: false, reason: "badMsisdn" };
+  if (await store.getDevice(msisdn)) return { ok: false, reason: "duplicate" };
+
+  const device: Device = {
+    msisdn,
+    label: input.label,
+    address: input.address,
+    kind: input.kind,
+    lastProvenAt: null,
+    registeredAt: new Date().toISOString(),
+  };
+  await store.putDevice(device);
+  return { ok: true, device };
 }
 
 // ── History (spec 2026-07-27 §6) ──
@@ -260,6 +305,11 @@ export function createPanelApi(
       // clock and to say honestly how far back the log reaches.
       timezone: config.village.timezone,
       retentionDays: config.data.retentionDays,
+      // Deliberately the constant, not a config field (spec §7.3: "use
+      // INBOX_RETENTION_DAYS, don't hardcode") — this window isn't a village
+      // policy choice the way incident retention is, so there is nothing to
+      // configure and nothing here to read config.data for.
+      inboxRetentionDays: INBOX_RETENTION_DAYS,
     });
   });
 
@@ -281,23 +331,11 @@ export function createPanelApi(
     const parsed = CreateDevice.safeParse(body);
     if (!parsed.success) return c.json({ error: m.invalid }, 400);
 
-    const msisdn = normaliseMsisdn(parsed.data.msisdn);
-    if (!MSISDN.test(msisdn)) return c.json({ error: m.badMsisdn }, 400);
-
-    // The number is the key, and re-registering one would silently repoint a
-    // household's alarm at a different address.
-    if (await store.getDevice(msisdn)) return c.json({ error: m.duplicate }, 400);
-
-    const device: Device = {
-      msisdn,
-      label: parsed.data.label,
-      address: parsed.data.address,
-      kind: parsed.data.kind as DeviceKind,
-      lastProvenAt: null,
-      registeredAt: new Date().toISOString(),
-    };
-    await store.putDevice(device);
-    return c.json(view(device), 201);
+    const result = await registerDevice(store, parsed.data);
+    if (!result.ok) {
+      return c.json({ error: result.reason === "badMsisdn" ? m.badMsisdn : m.duplicate }, 400);
+    }
+    return c.json(view(result.device), 201);
   });
 
   api.patch("/devices/:msisdn", async (c) => {
@@ -320,6 +358,60 @@ export function createPanelApi(
     const msisdn = normaliseMsisdn(c.req.param("msisdn"));
     if (!await store.getDevice(msisdn)) return c.json({ error: m.notFound }, 404);
     await store.deleteDevice(msisdn);
+    return c.body(null, 204);
+  });
+
+  // ── Bridge inbox (spec 2026-07-27 §7) ──
+  //
+  // The gap the memo was reaching for: an unregistered caller has been
+  // recorded by src/bridge/inbound.ts all along, but until this section
+  // nothing ever read it back. Newest first, exactly as Store.listInbox
+  // already orders it — no re-sorting here or in the SPA.
+
+  api.get("/inbox", async (c) => {
+    return c.json(await store.listInbox());
+  });
+
+  // "Register" from a specific inbox row — the number is the path param
+  // (what rang), never part of the body, so there is no way to submit this
+  // form against a different number than the one that reached the bridge.
+  // Goes through registerDevice(), the exact same validation and duplicate
+  // check as POST /devices — see that function's own doc for why this must
+  // never be a second, looser copy of that logic.
+  api.post("/inbox/:msisdn/register", async (c) => {
+    const msisdn = normaliseMsisdn(c.req.param("msisdn"));
+
+    // Consistent with dismiss below: this route only ever acts on a number
+    // the bridge actually recorded. Without this, a stale second tab (or a
+    // manufactured request) could register a row that was already dismissed
+    // or registered elsewhere — a second, unguarded create path alongside
+    // the one POST /devices provides (review 2026-07-28, F2).
+    const exists = (await store.listInbox()).some((e) => e.msisdn === msisdn);
+    if (!exists) return c.json({ error: m.inboxNotFound }, 404);
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = RegisterFromInbox.safeParse(body);
+    if (!parsed.success) return c.json({ error: m.invalid }, 400);
+
+    const result = await registerDevice(store, { msisdn, ...parsed.data });
+    if (!result.ok) {
+      return c.json({ error: result.reason === "badMsisdn" ? m.badMsisdn : m.duplicate }, 400);
+    }
+
+    // Only removed once the device is safely created: if registerDevice
+    // refused (most importantly, the duplicate case), the inbox entry must
+    // stay exactly where it was — nothing above this line writes anything.
+    await store.deleteInboxEntry(msisdn);
+    return c.json(view(result.device), 201);
+  });
+
+  // "Dismiss" — a wrong number or a misdial. Removes the row and creates
+  // nothing; there is no device write anywhere on this path.
+  api.delete("/inbox/:msisdn", async (c) => {
+    const msisdn = normaliseMsisdn(c.req.param("msisdn"));
+    const exists = (await store.listInbox()).some((e) => e.msisdn === msisdn);
+    if (!exists) return c.json({ error: m.inboxNotFound }, 404);
+    await store.deleteInboxEntry(msisdn);
     return c.body(null, 204);
   });
 

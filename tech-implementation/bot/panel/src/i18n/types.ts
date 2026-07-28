@@ -6,7 +6,7 @@
 //
 // Placeholders are {braced} and substituted by `t()` in mod.ts.
 
-import type { DeviceKind, DeviceStatus, IncidentSource } from "../api/types.ts";
+import type { BridgeChannel, DeviceKind, DeviceStatus, IncidentSource } from "../api/types.ts";
 
 export interface Strings {
   /** Browser tab title. */
@@ -38,12 +38,6 @@ export interface Strings {
     signOut: string;
   };
 
-  /** Section placeholders — replaced one screen at a time by §3, §6 and §7.
-   *  Config and History no longer have one: their real screens are below. */
-  placeholder: {
-    inbox: { heading: string; body: string };
-  };
-
   devices: {
     heading: string;
     add: string;
@@ -66,6 +60,10 @@ export interface Strings {
   form: {
     addTitle: string;
     editTitle: string;
+    /** Title when the form was opened from the Inbox's "Register" action
+     *  (spec 2026-07-27 §7.2) — same form, same fields, different title so an
+     *  admin knows which flow they're in. */
+    registerTitle: string;
     msisdn: string;
     msisdnHelp: string;
     label: string;
@@ -136,9 +134,43 @@ export interface Strings {
   };
 
   /**
+   * The Inbox screen (spec 2026-07-27 §7): unregistered callers waiting to be
+   * named, or dismissed. This is the documented way a household actually
+   * joins — see InboxEntry's own doc in the backend's src/store/types.ts.
+   */
+  inbox: {
+    heading: string;
+    /** States the retention window plainly — {days}. An inbox row is a
+     *  stranger's phone number until named, so it is kept for far less time
+     *  than an incident. */
+    intro: string;
+    empty: { heading: string; body: string };
+    columns: {
+      msisdn: string;
+      count: string;
+      firstSeen: string;
+      lastSeen: string;
+      channel: string;
+      lastBody: string;
+      actions: string;
+    };
+    channel: Record<BridgeChannel, string>;
+    register: string;
+    dismiss: string;
+  };
+
+  dismissConfirm: {
+    heading: string;
+    /** {msisdn} */
+    body: string;
+    confirm: string;
+    cancel: string;
+    dismissing: string;
+  };
+
+  /**
    * The History screen (spec 2026-07-27 §6): what has actually happened in
-   * the village, newest first, read-only, paged. See PlaceholderScreen for
-   * what this replaced.
+   * the village, newest first, read-only, paged.
    */
   history: {
     heading: string;

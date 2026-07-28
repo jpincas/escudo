@@ -26,15 +26,6 @@ export const es: Strings = {
     signOut: "Cerrar sesión",
   },
 
-  placeholder: {
-    inbox: {
-      heading: "Bandeja de entrada",
-      body: "Aquí aparecerán los números que han llamado a Escudo sin estar " +
-        "registrados, listos para darlos de alta como dispositivo. Todavía no " +
-        "está construido.",
-    },
-  },
-
   devices: {
     heading: "Dispositivos",
     add: "Añadir dispositivo",
@@ -72,6 +63,7 @@ export const es: Strings = {
   form: {
     addTitle: "Añadir dispositivo",
     editTitle: "Editar dispositivo",
+    registerTitle: "Registrar dispositivo",
     msisdn: "Teléfono",
     msisdnHelp: "Formato internacional, por ejemplo +34600111222. No se puede cambiar después.",
     label: "Etiqueta",
@@ -136,6 +128,44 @@ export const es: Strings = {
     save: "Guardar",
     saving: "Guardando…",
     saved: "Guardado.",
+  },
+
+  inbox: {
+    heading: "Bandeja de entrada",
+    intro: "Los números que llaman o escriben a Escudo sin estar registrados " +
+      "aparecen aquí, listos para darlos de alta o descartarlos. Se eliminan " +
+      "automáticamente a los {days} días.",
+    empty: {
+      heading: "No hay números pendientes",
+      body: "Cuando alguien llame o escriba al puente de Escudo desde un " +
+        "número que todavía no está registrado como dispositivo, aparecerá " +
+        "aquí para poder darlo de alta o descartarlo. Es también la única " +
+        "señal de que un dispositivo se instaló y no se terminó de configurar.",
+    },
+    columns: {
+      msisdn: "Teléfono",
+      count: "Veces",
+      firstSeen: "Primera vez",
+      lastSeen: "Última vez",
+      channel: "Vía",
+      lastBody: "Último mensaje",
+      actions: "Acciones",
+    },
+    channel: {
+      call: "Llamada",
+      sms: "SMS",
+    },
+    register: "Registrar",
+    dismiss: "Descartar",
+  },
+
+  dismissConfirm: {
+    heading: "Descartar número",
+    body: 'Vas a descartar "{msisdn}" de la bandeja de entrada. No se creará ' +
+      "ningún dispositivo, y si el número vuelve a llamar, aparecerá aquí de nuevo.",
+    confirm: "Descartar",
+    cancel: "Cancelar",
+    dismissing: "Descartando…",
   },
 
   history: {

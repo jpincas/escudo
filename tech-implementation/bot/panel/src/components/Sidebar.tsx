@@ -15,11 +15,12 @@ export function Sidebar({ me, section, onNavigate, onSignOut, inboxCount }: {
   onNavigate: (section: SectionId) => void;
   onSignOut: () => void;
   /**
-   * Seam for §7: the count of inbox entries waiting to be registered or
-   * dismissed. No section supplies this yet, so it stays undefined and the
-   * badge doesn't render — §7 wires it up without touching this component.
-   * Ámbar, never rojo-alarma: a device installed and not finished is
-   * something to attend to, not an alarm.
+   * The count of inbox entries waiting to be registered or dismissed (spec
+   * 2026-07-27 §7.3), supplied by Shell.tsx from InboxProvider. Undefined
+   * while that first fetch is still in flight, in which case the badge simply
+   * doesn't render rather than flashing a stale or wrong number. Ámbar, never
+   * rojo-alarma: a device installed and not finished is something to attend
+   * to, not an alarm.
    */
   inboxCount?: number;
 }) {

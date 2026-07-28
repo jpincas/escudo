@@ -54,7 +54,11 @@ export function App() {
     case "signedIn":
       return (
         <LocaleProvider locale={state.me.locale}>
-          <VillageProvider timezone={state.me.timezone} retentionDays={state.me.retentionDays}>
+          <VillageProvider
+            timezone={state.me.timezone}
+            retentionDays={state.me.retentionDays}
+            inboxRetentionDays={state.me.inboxRetentionDays}
+          >
             <Shell me={state.me} onSignOut={signOut} />
           </VillageProvider>
         </LocaleProvider>

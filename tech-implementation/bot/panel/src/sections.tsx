@@ -9,7 +9,7 @@ import type { SectionId } from "./router.ts";
 import { ConfigScreen } from "./components/ConfigScreen.tsx";
 import { DevicesScreen } from "./components/DevicesScreen.tsx";
 import { HistoryScreen } from "./components/HistoryScreen.tsx";
-import { PlaceholderScreen } from "./components/PlaceholderScreen.tsx";
+import { InboxScreen } from "./components/InboxScreen.tsx";
 
 export interface Section {
   id: SectionId;
@@ -19,11 +19,7 @@ export interface Section {
 
 export const SECTIONS: Section[] = [
   { id: "devices", label: (s) => s.sidebar.devices, Component: DevicesScreen },
-  {
-    id: "inbox",
-    label: (s) => s.sidebar.inbox,
-    Component: () => <PlaceholderScreen section="inbox" />,
-  },
+  { id: "inbox", label: (s) => s.sidebar.inbox, Component: InboxScreen },
   { id: "history", label: (s) => s.sidebar.history, Component: HistoryScreen },
   { id: "config", label: (s) => s.sidebar.config, Component: ConfigScreen },
 ];
