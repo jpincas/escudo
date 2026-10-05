@@ -16,6 +16,9 @@ website/.hugo_build.lock
 .venv/
 __pycache__/
 
+# Spec-session working folders (raw media, transcripts, specs)
+sessions/
+
 # Editor / OS noise
 .DS_Store
 *.swp
